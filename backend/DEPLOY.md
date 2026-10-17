@@ -4,7 +4,8 @@ The Flask API runs as a Vercel Python Function. Every submitted program runs in
 a disposable Vercel Sandbox microVM using a custom image with Python, Node.js,
 C/C++, Java, and Dart. Sandboxes have no network access, one vCPU, 2 GB memory,
 bounded output, and a strict execution deadline. Firebase ID tokens are required
-before the API creates a Sandbox.
+before the API creates a Sandbox. Vercel routes requests through
+`api/index.py` to the Flask app in `app.py`.
 
 ## Configure GitHub Actions
 
