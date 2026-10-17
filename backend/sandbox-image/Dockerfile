@@ -1,4 +1,4 @@
-FROM vercel/sandbox/node:24
+FROM vcr.vercel.com/vercel/sandbox/node:24
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -24,5 +24,3 @@ RUN apt-get update \
 
 USER ubuntu
 WORKDIR /vercel
-USER node
-WORKDIR /home/node
