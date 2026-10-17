@@ -1,6 +1,7 @@
 // ignore_for_file: must_be_immutable
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:stela_app/services/code_execution_auth.dart';
 import 'package:stela_app/constants/colors.dart';
 //import 'package:stela_app/constants/experimentDesc.dart';
 import 'package:stela_app/screens/profile.dart';
@@ -144,7 +145,7 @@ class MyFileExperiment extends StatelessWidget {
 
                               final response = await http.post(
                                 Uri.parse(serverUrl),
-                                headers: {'Content-Type': 'application/json'},
+                                headers: await codeExecutionHeaders(),
                                 body: jsonEncode(requestData),
                               );
 
@@ -594,7 +595,7 @@ class MyFileExperiment extends StatelessWidget {
 
                               final response = await http.post(
                                 Uri.parse(serverUrl),
-                                headers: {'Content-Type': 'application/json'},
+                                headers: await codeExecutionHeaders(),
                                 body: jsonEncode(requestData),
                               );
 

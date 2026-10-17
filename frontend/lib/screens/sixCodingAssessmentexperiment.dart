@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'package:stela_app/services/code_execution_auth.dart';
 import 'package:stela_app/constants/colors.dart';
 import 'package:stela_app/constants/userDetails.dart';
 import 'package:http/http.dart' as http;
@@ -512,7 +513,7 @@ Container(
 
                     final response = await http.post(
                       Uri.parse(serverUrl),
-                      headers: {'Content-Type': 'application/json'},
+                      headers: await codeExecutionHeaders(),
                       body: jsonEncode(requestData),
                     );
 
@@ -552,7 +553,7 @@ Container(
 
       final response = await http.post(
         Uri.parse(serverUrl),
-        headers: {'Content-Type': 'application/json'},
+        headers: await codeExecutionHeaders(),
         body: jsonEncode(requestData),
       );
 

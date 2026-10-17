@@ -1,6 +1,8 @@
 {
     "version": 2,
-    "public": true,
+    "installCommand": "flutter pub get --enforce-lockfile",
+    "buildCommand": "if [ -z \"$CODE_EXEC_ENDPOINT\" ]; then echo 'Set CODE_EXEC_ENDPOINT in the Vercel production environment.' >&2; exit 1; fi; flutter build web --release --dart-define=CODE_EXEC_ENDPOINT=\"$CODE_EXEC_ENDPOINT\"",
+    "outputDirectory": "build/web",
     "cleanUrls": true,
     "rewrites": [
         {

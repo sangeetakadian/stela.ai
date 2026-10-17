@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:stela_app/services/code_execution_auth.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
@@ -388,7 +389,7 @@ class SimulatedCodeRunner {
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         final resp = await http
-            .post(Uri.parse(url), headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload))
+            .post(Uri.parse(url), headers: await codeExecutionHeaders(), body: jsonEncode(payload))
             .timeout(const Duration(seconds: 25));
 
         Map<String, dynamic>? decoded;

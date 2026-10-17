@@ -1,210 +1,73 @@
-name: Build and Deploy Flutter Web to Vercel
+name: Build and deploy Flutter web to Vercel
 
 on:
   push:
     branches:
       - main
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy_vercel.yml"
+  workflow_dispatch:
 
-
+permissions:
+  contents: read
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Cache pub packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.pub-cache
-          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pub-
-
-      - name: Setup Flutter
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          # Use channel input for tracking the stable channel.
-          # Optionally pin to a concrete SDK version for reproducible builds:
-          # flutter-version: '3.13.0'
+          flutter-version: 3.35.7
           channel: stable
+          cache: true
+          cache-dependency-path: frontend/pubspec.lock
 
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Build Flutter web
-        run: flutter build web --release
-
-      - name: Setup Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          # Use Node 20 to match modern CLI engine requirements
-          node-version: '20'
+          node-version: 22
 
       - name: Install Vercel CLI
-        run: npm install -g vercel@latest
+        run: npm install --global vercel@64.5.0
 
-      - name: Deploy to Vercel
+      - name: Link Vercel project
+        working-directory: frontend
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "Set VERCEL_ORG_ID and VERCEL_PROJECT_ID in GitHub Actions secrets." >&2
+            exit 1
+          fi
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+      - name: Pull Vercel production settings
+        working-directory: frontend
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          # Optional: add these two repository secrets so Vercel identifies the commit author
-          # VERCEL_AUTHOR_NAME -> the display name of the Vercel user who owns the token
-          # VERCEL_AUTHOR_EMAIL -> the email address of that Vercel user (must belong to a team member)
-          VERCEL_AUTHOR_NAME: ${{ secrets.VERCEL_AUTHOR_NAME }}
-          VERCEL_AUTHOR_EMAIL: ${{ secrets.VERCEL_AUTHOR_EMAIL }}
         run: |
-          # Basic environment debug (no secrets printed)
-          vercel --version || true
-
-          # Ensure Vercel sees a commit author that is allowed to deploy to the team.
-          if [ -n "$VERCEL_AUTHOR_NAME" ]; then
-            export VERCEL_GIT_COMMIT_AUTHOR_NAME="$VERCEL_AUTHOR_NAME"
-          else
-            export VERCEL_GIT_COMMIT_AUTHOR_NAME="$GITHUB_ACTOR"
-          fi
-
-          if [ -n "$VERCEL_AUTHOR_EMAIL" ]; then
-            export VERCEL_GIT_COMMIT_AUTHOR_EMAIL="$VERCEL_AUTHOR_EMAIL"
-          else
-            export VERCEL_GIT_COMMIT_AUTHOR_EMAIL="$GITHUB_ACTOR@users.noreply.github.com"
-          fi
-
-          echo "Using commit author: $VERCEL_GIT_COMMIT_AUTHOR_NAME <$VERCEL_GIT_COMMIT_AUTHOR_EMAIL>"
-
-          # Configure git identity in the runner so tools that read git user information
-          # or the local git config see the expected author. This also sets the common
-          # GIT_* env vars so the Vercel deployment service receives the intended author
-          # metadata when it evaluates team access rules.
-          git config --global user.name "$VERCEL_GIT_COMMIT_AUTHOR_NAME" || true
-          git config --global user.email "$VERCEL_GIT_COMMIT_AUTHOR_EMAIL" || true
-          export GIT_AUTHOR_NAME="$VERCEL_GIT_COMMIT_AUTHOR_NAME"
-          export GIT_AUTHOR_EMAIL="$VERCEL_GIT_COMMIT_AUTHOR_EMAIL"
-          export GIT_COMMITTER_NAME="$VERCEL_GIT_COMMIT_AUTHOR_NAME"
-          export GIT_COMMITTER_EMAIL="$VERCEL_GIT_COMMIT_AUTHOR_EMAIL"
-
-          # Install jq so we can parse JSON output safely when resolving slugs -> ids
-          sudo apt-get update -y && sudo apt-get install -y jq || true
-
-          # If the provided VERCEL_ORG_ID is a slug (doesn't start with team_ or org_),
-          # try to resolve it to the canonical org/team id using the token.
-          RESOLVED_ORG_ID="$VERCEL_ORG_ID"
-          if [ -n "$VERCEL_ORG_ID" ] && ! echo "$VERCEL_ORG_ID" | grep -E '^team_|^org_' >/dev/null; then
-            echo "VERCEL_ORG_ID appears to be a slug; attempting to resolve with vercel teams ls"
-            TEAMS_JSON=$(vercel teams ls --token "$VERCEL_TOKEN" --json 2>/dev/null || true)
-            if [ -n "$TEAMS_JSON" ]; then
-              MATCHING_ID=$(echo "$TEAMS_JSON" | jq -r --arg slug "$VERCEL_ORG_ID" '.[] | select(.slug==$slug) | .id' | head -n1 || true)
-              if [ -n "$MATCHING_ID" ]; then
-                RESOLVED_ORG_ID="$MATCHING_ID"
-                echo "Resolved VERCEL_ORG_ID slug '$VERCEL_ORG_ID' -> id '$RESOLVED_ORG_ID'"
-              else
-                echo "Could not resolve slug '$VERCEL_ORG_ID' to an org/team id via teams list. Will try project inspect as a fallback. Available teams (truncated):"
-                echo "$TEAMS_JSON" | jq -c '.[] | {id: .id, slug: .slug, name: .name}' || true
-                # Fallback: inspect the project to obtain its team/org id
-                if [ -n "$VERCEL_PROJECT_ID" ]; then
-                  echo "Attempting to inspect project $VERCEL_PROJECT_ID to discover its owning team/org"
-                  PROJECT_JSON=$(vercel projects inspect "$VERCEL_PROJECT_ID" --token "$VERCEL_TOKEN" --json 2>/dev/null || true)
-                  if [ -n "$PROJECT_JSON" ]; then
-                    # Try common fields that may contain the org/team id
-                    ORG_FROM_PROJECT=$(echo "$PROJECT_JSON" | jq -r '.team.id // .orgId // .ownerId // empty' || true)
-                    if [ -n "$ORG_FROM_PROJECT" ]; then
-                      RESOLVED_ORG_ID="$ORG_FROM_PROJECT"
-                      echo "Resolved org/team id from project inspect: $RESOLVED_ORG_ID"
-                    else
-                      echo "Project inspect did not return a team/org id. Project JSON (truncated):"
-                      echo "$PROJECT_JSON" | jq -c 'del(.env, .builds, .routes, .settings) // .' || true
-                    fi
-                  else
-                    echo "Project inspect returned no JSON; token might lack permissions to view the project."
-                  fi
-                else
-                  echo "No VERCEL_PROJECT_ID set; cannot fallback to project inspect."
-                fi
-              fi
-            else
-              echo "vercel teams ls returned no JSON; token might be invalid or lack permissions. Trying project inspect fallback."
-              if [ -n "$VERCEL_PROJECT_ID" ]; then
-                PROJECT_JSON=$(vercel projects inspect "$VERCEL_PROJECT_ID" --token "$VERCEL_TOKEN" --json 2>/dev/null || true)
-                if [ -n "$PROJECT_JSON" ]; then
-                  ORG_FROM_PROJECT=$(echo "$PROJECT_JSON" | jq -r '.team.id // .orgId // .ownerId // empty' || true)
-                  if [ -n "$ORG_FROM_PROJECT" ]; then
-                    RESOLVED_ORG_ID="$ORG_FROM_PROJECT"
-                    echo "Resolved org/team id from project inspect: $RESOLVED_ORG_ID"
-                  else
-                    echo "Project inspect did not return a team/org id. Project JSON (truncated):"
-                    echo "$PROJECT_JSON" | jq -c 'del(.env, .builds, .routes, .settings) // .' || true
-                  fi
-                else
-                  echo "Project inspect returned no JSON; token might lack permissions to view the project."
-                fi
-              else
-                echo "No VERCEL_PROJECT_ID set; cannot fallback to project inspect."
-              fi
-            fi
-          fi
-
-          # Create a temporary .vercel project mapping so the CLI links to the correct project
-          if [ -n "$VERCEL_PROJECT_ID" ]; then
-            mkdir -p .vercel
-            if [ -n "$RESOLVED_ORG_ID" ]; then
-              # We have a canonical org/team id; write both orgId and projectId
-              printf '%s\n' '{"orgId": "%s", "projectId": "%s"}' "$RESOLVED_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
-              echo "Wrote .vercel/project.json with orgId and projectId (orgId may be resolved from slug)"
-            else
-              # No org/team id available; write only projectId to avoid mismatches
-              printf '%s\n' '{"projectId": "%s"}' "$VERCEL_PROJECT_ID" > .vercel/project.json
-              echo "Wrote .vercel/project.json with projectId only (no org/team id available)"
-            fi
-          else
-            echo "VERCEL_PROJECT_ID missing; skipping .vercel/project.json creation"
-          fi
-
-          # List the built files for debugging
-          echo "== build/web listing =="
-          ls -la build/web || true
-          echo "== index.html head (if present) =="
-          head -n 30 build/web/index.html || true
-
-          # Copy vercel.json into build/web so the deployed static site uses the same config
-          if [ -f vercel.json ]; then
-            echo "Copying vercel.json into build/web so Vercel sees routing config"
-            cp vercel.json build/web/
-          fi
-
-          pushd build/web
-          # If the build directory doesn't contain a .git, create a minimal git repo
-          # with a single commit authored by the expected Vercel team owner. This
-          # ensures the Vercel CLI can read commit metadata from the repo rather
-          # than falling back to an unauthenticated local author string.
-          if [ ! -d .git ]; then
-            echo "Creating temporary .git in build/web with author $VERCEL_GIT_COMMIT_AUTHOR_NAME <$VERCEL_GIT_COMMIT_AUTHOR_EMAIL>"
-            git init -b main >/dev/null 2>&1 || git init >/dev/null 2>&1
-            git config user.name "$VERCEL_GIT_COMMIT_AUTHOR_NAME"
-            git config user.email "$VERCEL_GIT_COMMIT_AUTHOR_EMAIL"
-            git add -A
-            # Use --author to force the commit author and avoid using runner user's email
-            git commit -m "chore: vercel deployment commit" --author="$VERCEL_GIT_COMMIT_AUTHOR_NAME <$VERCEL_GIT_COMMIT_AUTHOR_EMAIL>" >/dev/null 2>&1 || true
-            # Mark that we created a temp git so we can clean it up after deploy
-            TEMP_GIT_CREATED=1
-          fi
-          # Deploy: do not force a scope when org/team id is not provided.
-          # Let the Vercel CLI resolve the target using the supplied token and projectId.
-          vercel --token "$VERCEL_TOKEN" --yes --prod --debug || {
-            echo "Vercel CLI failed with exit code $? -- attempting to print teams/projects for debugging (no token printed)"
-            vercel teams ls --token "$VERCEL_TOKEN" || true
-            vercel projects ls --token "$VERCEL_TOKEN" || true
-            # cleanup temp git if we created one
-            if [ -n "$TEMP_GIT_CREATED" ]; then
-              rm -rf .git || true
-            fi
-            popd
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "Set VERCEL_TOKEN in GitHub Actions secrets." >&2
             exit 1
-          }
-          # cleanup temp git if we created one
-          if [ -n "$TEMP_GIT_CREATED" ]; then
-            rm -rf .git || true
           fi
-          popd
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build Flutter web
+        working-directory: frontend
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy to Vercel
+        working-directory: frontend
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"

@@ -28,6 +28,7 @@
 .flutter-plugins-dependencies
 *.dill
 *.lock
+!frontend/pubspec.lock
 
 # macOS specific
 __MACOSX/

@@ -18,56 +18,49 @@ flutter run -d chrome \
 
 ### Backend (Flask)
 
-For MacOS: 
+The API uses Vercel Sandbox credentials, so run it through the linked Vercel
+project rather than starting Flask directly:
 
 ```bash
 cd backend
-pip install -r requirements.txt
-gunicorn -w 2 -b 0.0.0.0:8080 app:app
+vercel pull --yes --environment=development
+vercel dev
 ```
 
-For Windows (PowerShell):
+## Deploy the Flutter web app to Vercel
 
-```powershell
-cd backend
-pip install -r requirements.txt
+The GitHub Actions workflow builds with Flutter 3.35.7 and deploys to Vercel
+when frontend changes are pushed to `main` (or when the workflow is run
+manually).
 
-# Option A: Flask dev server
-python -m flask run --host=0.0.0.0 --port=8080
+1. Create a Vercel project linked to this repository and set its **Root
+   Directory** to `frontend`. The repository's `frontend/vercel.json` provides
+   the Flutter install/build commands and web output directory.
+2. Deploy the backend first as described in
+   [backend/DEPLOY.md](backend/DEPLOY.md), then set the frontend project's
+   production `CODE_EXEC_ENDPOINT` to the backend's HTTPS `/execute` URL.
+3. Add these GitHub Actions repository secrets for the frontend:
+   - `VERCEL_TOKEN`
+   - `VERCEL_ORG_ID`
+   - `VERCEL_PROJECT_ID`
+4. Ensure `frontend/pubspec.lock` is committed, then push frontend changes to
+   `main` or run
+   **Build and deploy Flutter web to Vercel** from the Actions tab.
 
-# Option B: Waitress (production-ready on Windows)
-pip install waitress
-waitress-serve --listen=0.0.0.0:8080 app:app
-```
+The app embeds `CODE_EXEC_ENDPOINT` into the web build, so changing the Vercel
+environment variable requires a new deployment. Configure the app's domain in
+Vercel after the first deployment.
 
-## Deploy Frontend to Vercel
+## Deploy the backend
 
-Set the Vercel project root to `frontend`.
+The backend uses a separate Vercel project rooted at `backend/`. Its GitHub
+Actions workflow builds a multi-language Vercel Sandbox image, pushes it to
+Vercel Container Registry, waits for image preparation, and deploys the Flask
+API. It needs the shared `VERCEL_TOKEN` and `VERCEL_ORG_ID` secrets plus
+`VERCEL_BACKEND_PROJECT_ID` for the backend project.
 
-- Root Directory: `frontend`
-- Build Command: `flutter build web --release`
-- Output Directory: `build/web`
-- Environment Variable:
-	- `CODE_EXEC_ENDPOINT=https://<your-render-service>.onrender.com/execute`
-
-## Deploy Backend to Render
-
-Create a Web Service from this repo using:
-
-- Root Directory: `backend`
-- Runtime: `Docker` (recommended since this app needs Node/GCC/JDK too)
-- Exposed port: `8080`
-- Environment variable:
-	- `CODE_EXEC_TIMEOUT_SECONDS=6`
-	- `MAX_CONCURRENT_EXECUTIONS=6`
-	- `RATE_LIMIT_MAX_REQUESTS=20`
-	- `RATE_LIMIT_WINDOW_SECONDS=60`
-	- `MAX_REQUEST_BYTES=200000`
-	- `MAX_SOURCE_CHARS=50000`
-	- `MAX_STDIN_CHARS=20000`
-
-The backend endpoint will be:
-
-`https://<your-render-service>.onrender.com/execute`
-
-Use that URL as `CODE_EXEC_ENDPOINT` for the frontend deployment.
+The API requires Firebase authentication and runs submitted programs in
+network-disabled, disposable Vercel Sandbox microVMs. Sandbox use is billable;
+the backend Vercel project has a Firewall limit of 120 `/execute` requests per
+minute per IP. Review account spend limits before making execution available
+publicly. See [backend/DEPLOY.md](backend/DEPLOY.md) for setup details.
