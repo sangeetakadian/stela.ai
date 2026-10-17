@@ -38,9 +38,11 @@ jobs:
             echo "Set VERCEL_ORG_ID, VERCEL_BACKEND_PROJECT_ID, and VERCEL_TOKEN in GitHub Actions secrets." >&2
             exit 1
           fi
-          mkdir -p .vercel
+          mkdir -p .vercel ../.vercel
           printf '{"orgId":"%s","projectId":"%s"}\n' \
             "$VERCEL_ORG_ID" "$VERCEL_BACKEND_PROJECT_ID" > .vercel/project.json
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_BACKEND_PROJECT_ID" > ../.vercel/project.json
 
       - name: Authenticate Docker with Vercel Container Registry
         working-directory: backend
@@ -80,7 +82,6 @@ jobs:
           exit 1
 
       - name: Deploy backend to Vercel
-        working-directory: backend
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: vercel deploy --prod --yes --token="$VERCEL_TOKEN"
