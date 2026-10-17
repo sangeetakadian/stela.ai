@@ -60,7 +60,7 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           for attempt in $(seq 1 30); do
-            if tag_info="$(vercel vcr tag inspect stela-execution-runner latest --json --token="$VERCEL_TOKEN" 2>&1)"; then
+            if tag_info="$(vercel vcr tag inspect stela-execution-runner latest --json --token="$VERCEL_TOKEN")"; then
               if printf '%s' "$tag_info" | jq -e '[.. | strings | select(ascii_downcase == "ready")] | length > 0' >/dev/null; then
                 echo "Vercel Sandbox image is ready."
                 exit 0
