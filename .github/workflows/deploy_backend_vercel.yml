@@ -1,0 +1,86 @@
+name: Build sandbox and deploy backend to Vercel
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy_backend_vercel.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@64.5.0
+
+      - name: Link backend Vercel project
+        working-directory: backend
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_BACKEND_PROJECT_ID: ${{ secrets.VERCEL_BACKEND_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_BACKEND_PROJECT_ID" ] || [ -z "$VERCEL_TOKEN" ]; then
+            echo "Set VERCEL_ORG_ID, VERCEL_BACKEND_PROJECT_ID, and VERCEL_TOKEN in GitHub Actions secrets." >&2
+            exit 1
+          fi
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_BACKEND_PROJECT_ID" > .vercel/project.json
+
+      - name: Authenticate Docker with Vercel Container Registry
+        working-directory: backend
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel vcr login docker --token="$VERCEL_TOKEN"
+
+      - name: Build and push isolated execution image
+        working-directory: backend
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel vcr build docker ./sandbox-image stela-execution-runner:latest --push --token="$VERCEL_TOKEN"
+
+      - name: Wait for Vercel Sandbox image readiness
+        working-directory: backend
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          for attempt in $(seq 1 30); do
+            if tag_info="$(vercel vcr tag inspect stela-execution-runner latest --json --token="$VERCEL_TOKEN" 2>&1)"; then
+              if printf '%s' "$tag_info" | jq -e '[.. | strings | select(ascii_downcase == "ready")] | length > 0' >/dev/null; then
+                echo "Vercel Sandbox image is ready."
+                exit 0
+              fi
+              if printf '%s' "$tag_info" | jq -e '[.. | strings | select(ascii_downcase == "failed" or ascii_downcase == "error" or ascii_downcase == "unoptimized")] | length > 0' >/dev/null; then
+                echo "$tag_info" >&2
+                echo "Vercel Sandbox image preparation failed." >&2
+                exit 1
+              fi
+            else
+              echo "$tag_info"
+            fi
+            echo "Image is still being prepared (attempt $attempt/30)."
+            sleep 20
+          done
+          echo "The Vercel Sandbox image did not become ready within 10 minutes." >&2
+          exit 1
+
+      - name: Deploy backend to Vercel
+        working-directory: backend
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --prod --yes --token="$VERCEL_TOKEN"

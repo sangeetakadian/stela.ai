@@ -1,51 +1,75 @@
-# Deploying the `/execute` backend
+# Deploying the code execution backend
 
-This backend runs student/faculty code for grading.
+The Flask API runs as a Vercel Python Function. Every submitted program runs in
+a disposable Vercel Sandbox microVM using a custom image with Python, Node.js,
+C/C++, Java, and Dart. Sandboxes have no network access, one vCPU, 2 GB memory,
+bounded output, and a strict execution deadline. Firebase ID tokens are required
+before the API creates a Sandbox.
 
-**Security warning**: as written, this is **not** a secure sandbox. Only deploy it if you add proper isolation (container/VM sandboxing, no outbound network, strict CPU/memory limits, filesystem isolation, request auth/rate limiting).
+## Configure GitHub Actions
 
-## Local Docker run
+The `Build sandbox and deploy backend to Vercel` workflow builds and pushes the
+custom Sandbox image to Vercel Container Registry, waits for it to become ready,
+then deploys the backend project. Add these repository secrets in GitHub:
 
-From the `backend/` folder:
+- `VERCEL_TOKEN`
+- `VERCEL_ORG_ID`
+- `VERCEL_BACKEND_PROJECT_ID` — the ID of the `stela-exec-backend` project
 
-1. Build:
+The frontend deployment workflow uses the same token and org ID, plus
+`VERCEL_PROJECT_ID` for the `stela_ai` project.
 
-```bash
-docker build -t stela-exec-backend .
+The backend defaults to the Firebase project `stela23-f9a52`. Set
+`FIREBASE_PROJECT_ID` in Vercel only if the app uses a different Firebase
+project. The default CORS allowlist includes the configured app domain,
+localhost, and Vercel deployment domains. Set `ALLOWED_ORIGINS` to a
+comma-separated list if your frontend uses another domain.
+
+## Connect the frontend
+
+After the first backend deployment, copy its production domain and set the
+frontend Vercel project's production environment variable to:
+
+```text
+CODE_EXEC_ENDPOINT=https://YOUR_BACKEND_DOMAIN/execute
 ```
 
-2. Run:
+From the linked `frontend/` directory, use Vercel CLI to add the variable:
 
 ```bash
-docker run --rm -p 8080:8080 \
-  -e CODE_EXEC_TIMEOUT_SECONDS=8 \
-  stela-exec-backend
+vercel env add CODE_EXEC_ENDPOINT production
 ```
 
-3. Test:
+Enter the backend URL when prompted.
+
+Redeploy the frontend after changing the variable; Flutter embeds it at build
+time. Frontend execution requests automatically include the signed-in user's
+Firebase ID token.
+
+## Local development
+
+From the linked `backend/` directory, pull its Vercel development environment
+and start the API with:
 
 ```bash
-curl -s http://localhost:8080/execute \
-  -H "Content-Type: application/json" \
-  -d '{"language":"python","code":"print(1+2)","input":""}'
+vercel pull --yes --environment=development
+vercel dev
 ```
 
-## Point the Flutter app to the deployed backend
+This provides the credentials the Sandbox SDK needs. The local Python API does
+not execute submitted code on the host. Running it without Vercel Sandbox
+credentials returns an explicit service error.
 
-When you run the Flutter app, pass:
+Run backend tests with:
 
 ```bash
-flutter run -d chrome --dart-define=CODE_EXEC_ENDPOINT=https://YOUR_DOMAIN/execute
+python -m unittest discover -s backend -p "test_*.py"
 ```
 
-For a deployed web build:
+## Cost and abuse controls
 
-```bash
-flutter build web --dart-define=CODE_EXEC_ENDPOINT=https://YOUR_DOMAIN/execute
-```
-
-## Notes
-
-- Java requires the submitted code to declare `public class Main` (see backend/app.py).
-- If your host doesn’t have Node/JDK/C++ toolchain installed, JS/Java/C/C++ will fail.
-- The Dockerfile includes Node + GCC/G++ + default-jdk for convenience.
+Vercel Sandbox usage is billable and subject to the account's plan and quotas.
+The API applies a per-user request limit, and the backend Vercel project has a
+published Firewall rule limiting `/execute` to 120 requests per minute per IP.
+The in-process per-user limiter is still best-effort because Vercel Functions
+are stateless. Review Sandbox spend limits before sharing the app publicly.
