@@ -1,4 +1,4 @@
-FROM vcr.vercel.com/vercel/sandbox/node:24
+FROM node:24-bookworm
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -22,5 +22,5 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends dart \
   && rm -rf /var/lib/apt/lists/*
 
-USER ubuntu
-WORKDIR /vercel
+USER node
+WORKDIR /home/node
