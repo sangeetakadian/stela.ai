@@ -36,7 +36,6 @@ jobs:
         run: npm install --global vercel@64.5.0
 
       - name: Link Vercel project
-        working-directory: frontend
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -50,7 +49,6 @@ jobs:
             "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
 
       - name: Pull Vercel production settings
-        working-directory: frontend
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
@@ -61,13 +59,11 @@ jobs:
           vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
 
       - name: Build Flutter web
-        working-directory: frontend
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: vercel build --prod --token="$VERCEL_TOKEN"
 
       - name: Deploy to Vercel
-        working-directory: frontend
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
