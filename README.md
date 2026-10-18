@@ -64,3 +64,18 @@ network-disabled, disposable Vercel Sandbox microVMs. Sandbox use is billable;
 the backend Vercel project has a Firewall limit of 120 `/execute` requests per
 minute per IP. Review account spend limits before making execution available
 publicly. See [backend/DEPLOY.md](backend/DEPLOY.md) for setup details.
+
+## Assessment tagging enhancement
+
+The additive hierarchical concept/skill tagging and competency-evidence
+prototype, current validation, and remaining pilot gates are documented in
+[docs/assessment-tagging-completed-work.md](docs/assessment-tagging-completed-work.md).
+The original feature specification is in
+[docs/hierarchical-assessment-tagging-spec.md](docs/hierarchical-assessment-tagging-spec.md).
+
+## Realtime Database project copy
+
+The separate full-database backup/copy utility and its safety requirements are
+documented in [docs/rtdb-project-migration.md](docs/rtdb-project-migration.md).
+It requires Google authorization, backs up before writing, and refuses to
+overwrite a non-empty destination.

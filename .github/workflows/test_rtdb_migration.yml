@@ -1,0 +1,34 @@
+name: Test Realtime Database migration safety
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "tools/rtdb_migrate.py"
+      - "tools/test_rtdb_migrate.py"
+      - ".github/workflows/test_rtdb_migration.yml"
+  pull_request:
+    paths:
+      - "tools/rtdb_migrate.py"
+      - "tools/test_rtdb_migrate.py"
+      - ".github/workflows/test_rtdb_migration.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  safety-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run offline migration safety tests
+        run: python -m unittest discover -s tools -p "test_rtdb_migrate.py" -v
