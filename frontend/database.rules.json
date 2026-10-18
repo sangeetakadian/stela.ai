@@ -1,0 +1,28 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "taxonomy": {
+      "$subjectKey": {
+        ".read": "auth != null",
+        ".write": "auth != null && (auth.token.assessmentAdmin === true || auth.token.taxonomySteward === true || (auth.token.assessmentFaculty === true && auth.token.assessmentSubjectKey === $subjectKey))"
+      }
+    },
+    "question_tagging": {
+      "$subjectKey": {
+        "$quizId": {
+          "$questionId": {
+            ".read": "auth != null && (!data.exists() || data.child('reviewed').val() == true || auth.token.assessmentAdmin === true || auth.token.taxonomySteward === true || (auth.token.assessmentFaculty === true && auth.token.assessmentSubjectKey === $subjectKey))",
+            ".write": "auth != null && (auth.token.assessmentAdmin === true || auth.token.taxonomySteward === true || (auth.token.assessmentFaculty === true && auth.token.assessmentSubjectKey === $subjectKey))"
+          }
+        }
+      }
+    },
+    "student_evidence": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    }
+  }
+}

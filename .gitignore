@@ -29,6 +29,7 @@
 *.dill
 *.lock
 !frontend/pubspec.lock
+!frontend/rules_tests/package-lock.json
 
 # macOS specific
 __MACOSX/
@@ -90,6 +91,7 @@ __MACOSX/
 
 # Local tooling / caches
 .firebase/
+frontend/rules_tests/node_modules/
 
 # Python virtual environments
 .venv/
