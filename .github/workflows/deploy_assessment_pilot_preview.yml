@@ -75,43 +75,9 @@ jobs:
       - name: Build pilot web app
         working-directory: frontend
         env:
-          CODE_EXEC_ENDPOINT: ${{ vars.PILOT_CODE_EXEC_ENDPOINT }}
+          CODE_EXEC_ENDPOINT: https://stela-exec-backend.vercel.app/execute
           VERCEL_ENV: preview
-          PILOT_FIREBASE_API_KEY: ${{ vars.PILOT_FIREBASE_API_KEY }}
-          PILOT_FIREBASE_APP_ID: ${{ vars.PILOT_FIREBASE_APP_ID }}
-          PILOT_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.PILOT_FIREBASE_MESSAGING_SENDER_ID }}
-          PILOT_FIREBASE_PROJECT_ID: ${{ vars.PILOT_FIREBASE_PROJECT_ID }}
-          PILOT_FIREBASE_DATABASE_URL: ${{ vars.PILOT_FIREBASE_DATABASE_URL }}
-          PILOT_FIREBASE_AUTH_DOMAIN: ${{ vars.PILOT_FIREBASE_AUTH_DOMAIN }}
-          PILOT_FIREBASE_STORAGE_BUCKET: ${{ vars.PILOT_FIREBASE_STORAGE_BUCKET }}
-          PILOT_FIREBASE_MEASUREMENT_ID: ${{ vars.PILOT_FIREBASE_MEASUREMENT_ID }}
-        run: |
-          set -euo pipefail
-          if [ -z "$CODE_EXEC_ENDPOINT" ]; then
-            echo "Set PILOT_CODE_EXEC_ENDPOINT in GitHub Actions variables." >&2
-            exit 1
-          fi
-          for key in PILOT_FIREBASE_API_KEY PILOT_FIREBASE_APP_ID PILOT_FIREBASE_MESSAGING_SENDER_ID PILOT_FIREBASE_PROJECT_ID PILOT_FIREBASE_DATABASE_URL PILOT_FIREBASE_AUTH_DOMAIN PILOT_FIREBASE_STORAGE_BUCKET; do
-            if [ -z "${!key}" ]; then
-              echo "Set $key in GitHub Actions variables after creating the pilot Firebase project." >&2
-              exit 1
-            fi
-          done
-          if [ "$PILOT_FIREBASE_PROJECT_ID" = "stela23-f9a52" ]; then
-            echo "Pilot build refuses the existing shared Firebase project." >&2
-            exit 1
-          fi
-          flutter build web --release \
-            --dart-define=ISTELA_ASSESSMENT_PILOT=true \
-            --dart-define=PILOT_FIREBASE_API_KEY="$PILOT_FIREBASE_API_KEY" \
-            --dart-define=PILOT_FIREBASE_APP_ID="$PILOT_FIREBASE_APP_ID" \
-            --dart-define=PILOT_FIREBASE_MESSAGING_SENDER_ID="$PILOT_FIREBASE_MESSAGING_SENDER_ID" \
-            --dart-define=PILOT_FIREBASE_PROJECT_ID="$PILOT_FIREBASE_PROJECT_ID" \
-            --dart-define=PILOT_FIREBASE_DATABASE_URL="$PILOT_FIREBASE_DATABASE_URL" \
-            --dart-define=PILOT_FIREBASE_AUTH_DOMAIN="$PILOT_FIREBASE_AUTH_DOMAIN" \
-            --dart-define=PILOT_FIREBASE_STORAGE_BUCKET="$PILOT_FIREBASE_STORAGE_BUCKET" \
-            --dart-define=PILOT_FIREBASE_MEASUREMENT_ID="$PILOT_FIREBASE_MEASUREMENT_ID" \
-            --dart-define=CODE_EXEC_ENDPOINT="$CODE_EXEC_ENDPOINT"
+        run: flutter build web --release --dart-define=CODE_EXEC_ENDPOINT="$CODE_EXEC_ENDPOINT"
 
   deploy-preview:
     needs: validate

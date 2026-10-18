@@ -9,8 +9,11 @@ import {
 import { get, ref, set } from 'firebase/database';
 
 const projectId = 'demo-assessment-tagging';
-const rules = readFileSync(new URL('../database.rules.json', import.meta.url), 'utf8');
-const databasePort = Number(process.env.FIREBASE_DATABASE_EMULATOR_PORT || 9000);
+const rules = readFileSync(
+  new URL('./assessment_tagging.database.rules.test.json', import.meta.url),
+  'utf8',
+);
+const databasePort = Number(process.env.FIREBASE_DATABASE_EMULATOR_PORT || 19000);
 
 let testEnvironment;
 
@@ -32,6 +35,10 @@ before(async () => {
       }),
       set(ref(database, 'question_tagging/course_one/quiz_one/unreviewed'), {
         reviewed: false,
+      }),
+      set(ref(database, 'quizzes/course_one/Unit_1/quiz_one'), {
+        title: 'Pilot quiz',
+        questions: [],
       }),
     ]);
   });
@@ -106,6 +113,30 @@ test('admin and taxonomy steward claims grant cross-course writes', async () => 
   await assertSucceeds(set(ref(stewardDatabase, 'question_tagging/course_two/quiz_two/q1'), {
     reviewed: true,
   }));
+});
+
+test('authenticated students can read legacy quizzes but cannot edit them', async () => {
+  const database = testEnvironment.authenticatedContext('student').database();
+  const quiz = ref(database, 'quizzes/course_one/Unit_1/quiz_one');
+
+  await assertSucceeds(get(quiz));
+  await assertFails(set(quiz, { title: 'Changed by student' }));
+});
+
+test('faculty quiz writes are limited to the claimed subject key', async () => {
+  const database = testEnvironment.authenticatedContext('faculty-one', {
+    assessmentFaculty: true,
+    assessmentSubjectKey: 'course_one',
+  }).database();
+
+  await assertSucceeds(set(
+    ref(database, 'quizzes/course_one/Unit_1/quiz_one/title'),
+    'Updated by faculty',
+  ));
+  await assertFails(set(
+    ref(database, 'quizzes/course_two/Unit_1/quiz_one/title'),
+    'Cross-course write',
+  ));
 });
 
 test('students read reviewed and missing sidecars but not unreviewed data', async () => {

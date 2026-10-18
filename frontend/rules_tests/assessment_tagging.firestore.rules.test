@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read: if request.auth != null;
+    }
+
+    match /users/{user} {
+      allow read, write: if request.auth.uid == user;
+    }
+
+    match /subjects/{subject} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.facultyUID == request.auth.uid;
+      allow update, delete: if request.auth.uid == resource.data.facultyUID;
+    }
+
+    match /subjects/{subject}/quizzes/{quiz} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if request.auth.uid == get(/databases/$(database)/documents/subjects/$(subject)).data.facultyUID;
+    }
+
+    match /subjects/{subject}/assignments/{assignment} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if request.auth.uid == get(/databases/$(database)/documents/subjects/$(subject)).data.facultyUID;
+    }
+
+    match /quiz_submissions/{submission} {
+      allow create: if request.auth != null
+        && (('studentId' in request.resource.data) || ('studentUID' in request.resource.data))
+        && (!('studentId' in request.resource.data) || request.resource.data.studentId == request.auth.uid)
+        && (!('studentUID' in request.resource.data) || request.resource.data.studentUID == request.auth.uid);
+    }
+
+    match /assignments/{assignment} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.facultyUID == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.facultyUID == request.auth.uid;
+    }
+
+    match /assignmentSubmissions/{submission} {
+      allow read: if request.auth != null && (
+        resource.data.studentUID == request.auth.uid ||
+        get(/databases/$(database)/documents/assignments/$(resource.data.assignmentId)).data.facultyUID == request.auth.uid
+      );
+      allow create: if request.auth != null && request.resource.data.studentUID == request.auth.uid;
+      allow update, delete: if false;
+    }
+  }
+}

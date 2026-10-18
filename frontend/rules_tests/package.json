@@ -6,7 +6,7 @@
     "test": "node --test",
     "test:claims": "node --test claim_provisioner.test.js",
     "test:build-config": "node --test build_vercel.test.js",
-    "test:emulator": "firebase emulators:exec --config ../firebase.json --only database --project demo-assessment-tagging \"npm test\""
+    "test:emulator": "firebase emulators:exec --config ../firebase.rules.test.json --only database,firestore --project demo-assessment-tagging \"npm test\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "6.0.0",

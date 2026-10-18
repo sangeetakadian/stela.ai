@@ -2,6 +2,12 @@
   "rules": {
     ".read": false,
     ".write": false,
+    "quizzes": {
+      "$subjectKey": {
+        ".read": "auth != null",
+        ".write": "auth != null && (auth.token.assessmentAdmin === true || (auth.token.assessmentFaculty === true && auth.token.assessmentSubjectKey === $subjectKey))"
+      }
+    },
     "taxonomy": {
       "$subjectKey": {
         ".read": "auth != null",

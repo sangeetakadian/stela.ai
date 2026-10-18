@@ -77,13 +77,13 @@ The status table below is the release source of truth; implementation or unit te
 | Additive sidecar persistence and legacy quiz payload preservation | Unit-tested | `assessment_tagging_service_test.dart` and `assessment_tagging_test.dart`; real old-client coexistence is not verified. |
 | Reopen and stale-fingerprint handling | Unit-tested | Tagging-service tests cover stable/changed fingerprints and metadata preservation; UI save/reopen is not Emulator-verified. |
 | Student scoring identity, evidence attribution, threshold and abstention | Unit-tested | `assessment_feedback_service_test.dart` covers reviewed/primary tags, invalid/stale mappings, duplicate identity, skill threshold, missing score data, and parent-roll-up deduplication. Randomized end-to-end score alignment remains unverified. |
-| RTDB rules use trusted role claims and restrict assigned faculty to one subject key | Emulator-verified | The allow/deny matrix passed in GitHub Actions run `39118782771`, including assigned/cross-course faculty, missing claims, student read/write restrictions, and admin/steward access. |
+| Candidate RTDB rules for quizzes, taxonomy, and question tags | Emulator-verified | The isolated Emulator rule suite covers authenticated legacy quiz reads, faculty writes limited to the claimed subject, course denial, reviewed-tag student reads, and missing claims. These are candidate rules only, not the rules currently deployed to the shared Firebase project. |
 | Trusted Admin SDK role/course claim provisioning | Unit-tested | A guarded CLI tool supports explicit pilot-account claims via ADC in `frontend/rules_tests/provision_assessment_claims.mjs`; it does not infer roles from client-created Firestore documents. The institution must still approve the role/course roster and an authorized operator must apply claims. |
-| Rules denial/allow matrix in Firebase Emulator | Emulator-verified | `test_assessment_tagging_rules.yml`, run `39118782771` on commit `ee6ec0294ef50ba9d42f1a6f2bf029ec9728616e`; CI uses Java 21. The local emulator command still cannot start because Java is unavailable locally. |
-| Pilot access to legacy quizzes and persisted student attempts | Blocked | `database.rules.json` defaults to deny and defines no `/quizzes` access; `firestore.rules` has no `quiz_submissions` write rule. The metadata allow/deny matrix does not test these legacy application paths. A pilot-only policy and corresponding Emulator coverage are required before those rules can be deployed. |
-| Compatibility with other applications on the existing shared Firebase project | Blocked | The draft feature rules default-deny paths not listed in the rules file and would block existing clients if deployed there. Do not deploy them to `stela23-f9a52`; the pilot must use its own Firebase project. Existing shared rules and cross-application behavior were not changed or verified. |
+| Candidate Firestore rule for a student's own quiz submission | Emulator-verified | The isolated rules suite permits self-owned submission creates and denies anonymous, other-user, and conflicting-UID writes. The candidate rule has not been merged into or deployed to the shared project's active rules. |
+| Current shared-project rules and feature-path authorization | Blocked | Firebase CLI reports no authorized accounts; an unauthenticated read of the RTDB rules endpoint returns HTTP 403. The active RTDB and Firestore rules therefore could not be inspected. No production rules or data were changed. |
+| Compatibility with other applications using the shared Firebase project | Blocked | The code keeps tagging metadata in sidecar paths and preserves legacy quiz fields, but older-app access under the active shared rules is unverified. Do not deploy the Emulator candidate rules as production rules: they are not a merge with the active rules and could deny unrelated paths. |
 | Existing quiz, both Excel imports, images, editing, randomization and old-client compatibility | Blocked | Unit coverage does not yet prove both import workflows, historical payload behavior, image flows, answer alignment, or repeated-import behavior end to end. |
-| Pilot build, deployment, smoke test and rollback record | Blocked | No dedicated pilot Firebase/Vercel project or pilot accounts are configured. No remote deployment has been made. |
+| Separate professor-facing Vercel deployment using current Firebase config | Blocked | The separate `stela-professor-pilot` Vercel project and Preview code-runner variable are configured, but no deployment URL has been verified. Active shared Firebase rules and an authorized professor/test-student account pair are still unavailable for end-to-end smoke testing. A separate Firebase project is not required. |
 | Expert review, pilot approval, ethics and diagnostic evaluation | Blocked | These are external research decisions; software tests are not evidence of scientific validity. |
 
 ### Completed in this phase
@@ -93,16 +93,15 @@ The status table below is the release source of truth; implementation or unit te
 - Sidecar load/save with stable question fingerprints, explicit stale reconfirmation, and preservation of unknown metadata
 - Quiz-scoped student evidence based on per-question earned/possible marks, reviewed mappings, and explicit insufficient-evidence states
 - Concept ancestor roll-up with per-question deduplication and abstention when taxonomy is unavailable
-- Draft RTDB authorization now checks server-issued Firebase Auth custom claims rather than a client-writable role mirror
-- Firebase Emulator test harness and CI workflow added; execution remains a release gate
+- Candidate Emulator rules add quiz reads for authenticated users, claim-scoped faculty quiz writes, and student-owned attempt creation; these candidates are isolated from the normal Firebase deploy config
+- Normal Vercel builds continue using the checked-in shared-project Firebase options; the Preview validation build uses the existing code-execution backend
 
 ### Remaining work, in release order
 
-1. Obtain the institution-approved staging role/course roster, then have an authorized Firebase Admin operator apply one-course claims with the guarded Admin SDK utility. The pilot contract currently uses a single `assessmentSubjectKey`; multi-course claim semantics are not implemented.
-2. Run and fix the RTDB allow/deny matrix in the Firebase Emulator, including legitimate faculty, cross-course faculty, students, admins/stewards, missing claims, and private student evidence.
-3. Add end-to-end tests for faculty tag/save/reopen/edit/stale recovery, student randomization/scoring/evidence, both Excel creation flows, images, and old quiz records.
-4. Run the established Flutter build/test gates and a compatibility review against supported legacy payloads.
-5. Only after the above gates, use an approved staging Firebase project and staging accounts for deployment and smoke tests; record commit and rollback steps. Do not deploy these draft rules to production.
+1. Obtain authorized read access to the active RTDB and Firestore rules for `stela23-f9a52`, or have a Firebase administrator provide the current rules exports. Merge only the minimal necessary additive rules, if the active policy lacks the required operations, then validate the merged rules in the Emulator.
+2. Run the live workflow using an authorized professor account and a dedicated test quiz that does not alter existing quiz records; verify tag save/reopen/stale review and student attempt/evidence.
+3. Add end-to-end coverage for both Excel import paths, images, historical quiz data, randomized scoring alignment, and old-client coexistence.
+4. Create a separate Vercel project for the professor-facing Preview, configure it with the current Firebase options and code-execution endpoint, then deploy and verify its actual URL. Do not change the existing `stela_ai` deployment.
 6. Keep expert review, pilot approval, ethics, and empirical diagnostic validation as separate external gates.
 
 ### Current continuation
@@ -125,7 +124,7 @@ The next short-term milestone is the Firebase-backed taxonomy registry and permi
 
 This iteration adds the Firebase serialization contract for taxonomy nodes so the registry can be stored and reconstructed from the same shape expected by the assessment-tagging data model. The implementation preserves the compatibility-first design while making the taxonomy layer ready to connect to a real course-scoped data source.
 
-I also added the initial RTDB security contract in [frontend/database.rules.json](../frontend/database.rules.json). This locks the taxonomy and question-tagging paths behind authenticated faculty/admin roles and keeps student evidence scoped to the student's own data. The remaining step is to connect these rules to the actual deployed user-role source and course membership model so they are enforced against the real institution schema.
+I also added an Emulator-only RTDB candidate in [assessment_tagging.database.rules.test.json](../frontend/rules_tests/assessment_tagging.database.rules.test.json). It exercises claim-scoped faculty edits and student reads, but is deliberately excluded from the normal Firebase deploy configuration because it is not a merged copy of the shared project's active rules.
 
 The current continuation moves the app one step closer to operational use by adding a taxonomy management dialog that lets faculty create and archive taxonomy nodes directly from the quiz editor, while persisting the in-memory registry to the Firebase taxonomy path for the active subject. This is the practical bridge between the safe model layer and the real governance workflow the spec requires.
 
@@ -135,46 +134,28 @@ Faculty edit/reopen now loads the same sidecar data. Stale mappings are shown fo
 
 The latest evidence increment rolls a reviewed concept association up through its taxonomy ancestors, while de-duplicating each scored question at each concept. Taxonomy is loaded alongside question tags before shuffling and passed to the result feedback service; without the registry, only directly tagged concept evidence is shown and no parent evidence is inferred. This enables users to see a cautious summary at broader concept levels without multiplying marks when a question has sibling concept tags.
 
-Validation this increment: `flutter test test/assessment_feedback_service_test.dart test/assessment_tagging_service_test.dart test/assessment_tagging_test.dart test/taxonomy_service_test.dart test/widget_test.dart` passes (28 tests), and `flutter build web --release` succeeds (with WebAssembly dry-run incompatibility notices from `universal_html`/`dart:html`). New regression coverage verifies that sibling tags contribute a question only once to their shared ancestor and that missing taxonomy data does not invent parent evidence. The rules test JavaScript passes `node --check`, and `npm ls --depth=0` confirms the pinned direct dependencies are installed. `npm run test:emulator` is blocked before tests start because Firebase CLI cannot spawn `java -version`; no rules pass is claimed. `npm audit` reports 12 test-tool dependency advisories (8 high, 4 moderate, 0 critical); these are in the rules-test toolchain, not the Flutter production dependency set. Non-forced `npm audit fix` could not remediate them and recommends breaking dependency changes. Targeted `flutter analyze` exits with 100 warnings/info diagnostics (2 warnings and 98 infos, no error diagnostics); because the files were already dirty before this continuation, there is no clean analyzer baseline to attribute those findings to.
+Current validation: the focused Flutter suite passes (31 tests); the web release build succeeds and embeds version `8.0.0` / build number `8`; the claims and Vercel routing suites pass (11 tests); and the RTDB/Firestore Emulator suite passes (22 tests) using Java 21. The build reports the existing WebAssembly dry-run incompatibility from `universal_html`/`dart:html`; normal web compilation succeeds. Emulator results validate only the checked-in test candidates, not the deployed shared Firebase rules. The deployed rules could not be read because Firebase CLI has no authorized account and the unauthenticated RTDB rules endpoint returns HTTP 403.
 
 ### Pilot deployment and rollback runbook
 
-No pilot Firebase/Vercel projects or pilot credentials are configured yet. This is an internal pilot, not a formal staging or general production release. After the Emulator and core workflow checks pass:
+The professor-facing Preview should use the existing shared Firebase project and a separate Vercel project. No Firebase configuration or deployed rules are changed by this workflow.
 
-#### Pilot Firebase setup
+#### Shared Firebase authorization check
 
-1. Create a separate Firebase project for the professor-facing pilot. Never select the existing `stela23-f9a52` project.
-2. Enable Firebase Authentication email/password sign-in and create one pilot faculty account and one pilot student account.
-3. Initialize Realtime Database, Firestore, and Storage in the pilot project. Record its project ID and RTDB URL/region.
-4. Register a Web app and copy its public Firebase web configuration into both (a) the Vercel Preview environment variables and (b) GitHub Actions Variables for pilot build validation. Required names: `PILOT_FIREBASE_API_KEY`, `PILOT_FIREBASE_APP_ID`, `PILOT_FIREBASE_MESSAGING_SENDER_ID`, `PILOT_FIREBASE_PROJECT_ID`, `PILOT_FIREBASE_DATABASE_URL`, `PILOT_FIREBASE_AUTH_DOMAIN`, `PILOT_FIREBASE_STORAGE_BUCKET`; `PILOT_FIREBASE_MEASUREMENT_ID` is optional. Set `ISTELA_ASSESSMENT_PILOT_BUILD=true` only in the dedicated pilot Vercel project's Preview environment; ordinary Preview builds do not use pilot Firebase settings. Also set `CODE_EXEC_ENDPOINT` in the dedicated Vercel project's Preview environment and `PILOT_CODE_EXEC_ENDPOINT` as a GitHub Actions Variable.
-5. Confirm which pilot account is faculty and its subject key. Use a trusted Admin SDK operator (Application Default Credentials with minimum necessary IAM) to provision its custom claims using the guarded CLI. Never put service-account JSON in the repository or send it in chat.
-6. The Emulator CI job requires Java 17+; the GitHub Actions workflow provisions this runtime.
+1. Ask a Firebase administrator to export the current RTDB and Firestore rules, or authorize a Firebase CLI account with read access to `stela23-f9a52`.
+2. Compare the active rules with the operations the feature uses: reads of `quizzes/$subjectKey`, writes to `question_tagging/$subjectKey/$quizId/$questionId` and `taxonomy/$subjectKey`, and creation of a student's own `quiz_submissions` document.
+3. If a rule is missing, merge only the minimum path-specific rule into the active rules. Do not deploy either Emulator candidate as a replacement for the shared rules. Re-run the Emulator tests against a merged rules export before any rules deployment.
 
-#### Pilot deployment after release gates pass
+#### Separate Vercel Preview after rule and account checks
 
-1. Create a separate Vercel project for the pilot under the authorized Vercel team. Do not use the project configured for `https://stelaai.vercel.app/`. Set its Preview environment variables listed above.
-2. Configure these GitHub Actions secrets: existing `VERCEL_TOKEN`, `ASSESSMENT_PILOT_VERCEL_ORG_ID`, and `ASSESSMENT_PILOT_VERCEL_PROJECT_ID` for the separate pilot Vercel project. The workflow explicitly refuses the current Vercel production project.
-3. Use the confirmed pilot Firebase project ID; inspect the intended Firebase project before any deployment. After Emulator tests pass, deploy only the RTDB rules to that project:
+1. The separate `stela-professor-pilot` Vercel project is created; do not use `stela_ai` or `stela-exec-backend`. The app's checked-in default Firebase options point to `stela23-f9a52`.
+2. The Preview environment variable `CODE_EXEC_ENDPOINT` is set to `https://stela-exec-backend.vercel.app/execute`. Do not set `ISTELA_ASSESSMENT_PILOT_BUILD` or alternate `PILOT_FIREBASE_*` values for this shared-project deployment.
+3. GitHub Actions secrets `VERCEL_TOKEN`, `ASSESSMENT_PILOT_VERCEL_ORG_ID`, and `ASSESSMENT_PILOT_VERCEL_PROJECT_ID` are configured for the new Vercel project. The workflow refuses the existing production project ID.
+4. Deploy the feature branch to Preview only after confirming active Firebase rules and a safe professor/test-student account pair. Do not run `firebase deploy` from this branch until the active rules have been merged and reviewed.
+5. Open the generated Preview URL and test professor sign-in, quiz editor, tag save/reopen/stale review, student attempt/evidence, and an unauthorized denial. Record the commit and Preview URL.
+6. Roll back by restoring the previous Vercel Preview deployment. This does not affect the existing production Vercel URL or Firebase data.
 
-   ```text
-   cd frontend
-   firebase deploy --only database --project <pilot-firebase-project-id>
-   ```
-
-   Use an authorized Firebase account, the exact pilot project ID, and never deploy rules to `stela23-f9a52`.
-4. For each approved pilot account, preview claim changes first from `frontend/rules_tests/`:
-
-   ```text
-   node provision_assessment_claims.mjs <pilot-firebase-project-id> <firebase-auth-uid> faculty <subject-key>
-   node provision_assessment_claims.mjs <pilot-firebase-project-id> <firebase-auth-uid> faculty <subject-key> --apply --confirm-project=<pilot-firebase-project-id>
-   ```
-
-   The operator must authenticate with Application Default Credentials or an approved service account outside the repository. Ask each account to refresh its Firebase ID token after claims change.
-5. Push the feature branch after its GitHub variables and Vercel pilot secrets are configured. The workflow runs the rules Emulator tests and Flutter regressions/build before deploying to the separate Vercel Preview project. Confirm the resulting Preview URL and Firebase project identity before sharing it with the professor.
-6. Run faculty sign-in, tag/save/reopen/edit, student attempt/evidence, and denied-user smoke checks; record the deployed Git commit and Firebase project ID.
-7. Roll back by restoring the prior Vercel Preview deployment and re-deploying the previously reviewed pilot RTDB rules. Keep the exact prior rules artifact with the pilot release record.
-
-No pilot deployment or scientific validation is claimed. The remaining pilot gates are approved pilot Firebase/Vercel projects and accounts, deployed core-workflow smoke checks, and review of the test-tool dependency audit. Software tests do not establish research validity.
+No Preview deployment or live workflow verification is claimed. Software and Emulator tests do not establish research validity.
 
 ### Professor-demo UI checkpoint
 
@@ -184,9 +165,9 @@ Validation for this checkpoint:
 
 - `cd frontend && flutter test test/assessment_feedback_service_test.dart test/assessment_tagging_service_test.dart test/assessment_tagging_test.dart test/assessment_tagging_ui_test.dart test/taxonomy_service_test.dart test/widget_test.dart` — **31 passed**.
 - Legacy quiz serialization strips tag/cache-only fields while preserving images and unknown question properties; covered by `assessment_tagging_service_test.dart`.
-- `cd frontend && flutter build web --release` with non-live dummy pilot Dart defines — **build succeeded**. Flutter reports the existing WebAssembly dry-run incompatibility from `universal_html`/`dart:html`; the normal web release build completes.
+- `cd frontend && flutter build web --release --dart-define=CODE_EXEC_ENDPOINT=https://stela-exec-backend.vercel.app/execute` — **build succeeded** using the checked-in shared Firebase options. `build/web/version.json` reports version `8.0.0`, build number `8`. Flutter reports the existing WebAssembly dry-run incompatibility from `universal_html`/`dart:html`; normal web output completes.
 - `cd frontend/rules_tests && npm run test:build-config && npm run test:claims` — **11 passed**, including ordinary Preview isolation and pilot-only Preview enforcement.
-- `cd frontend/rules_tests && npm run test:emulator` remains blocked locally because Java is not installed; the rules Emulator suite **passed in GitHub Actions run `39118782771`** with Java 21.
-- On the pushed checkpoint, GitHub Actions run `39120435959` passed the rules Emulator step and focused Flutter test step; it stopped at the pilot web-build configuration guard because `PILOT_CODE_EXEC_ENDPOINT` and pilot Firebase variables are not configured. Deployment was skipped.
+- `cd frontend/rules_tests && npm run test:emulator` with Android Studio Java 21 on PATH — **22 passed** across the isolated RTDB and Firestore candidate rules.
+- Candidate Emulator tests do not establish the live project's rules. `firebase login:list` reports no authorized accounts, and the unauthenticated rules endpoint returns HTTP 403.
 
-No pilot URL is available yet. A dedicated pilot Firebase project and a separate Vercel project, authorized test accounts, and their configuration/access are required before deployment and real faculty/student smoke testing. The current Flutter build used dummy values only and did not connect to Firebase. The checked-in rules currently protect the new metadata paths but are not a complete access policy for the quiz and Firestore attempt paths required by the app; do not deploy them to any environment until those pilot paths have a reviewed, Emulator-tested policy.
+No separate professor Preview URL exists yet. Vercel CLI currently lists only `stela_ai` and `stela-exec-backend`; a third, separate Preview project is needed. A new Firebase project is not required. Before real faculty/student smoke testing, an authorized operator must confirm the active shared rules and provide an authorized professor/test-student account pair and a safe test quiz. The test-only rules are not production rules and must not be deployed as a replacement.

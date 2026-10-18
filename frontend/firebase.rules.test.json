@@ -1,0 +1,16 @@
+{
+  "database": {
+    "rules": "rules_tests/assessment_tagging.database.rules.test.json"
+  },
+  "firestore": {
+    "rules": "rules_tests/assessment_tagging.firestore.rules.test"
+  },
+  "emulators": {
+    "database": {
+      "port": 19000
+    },
+    "firestore": {
+      "port": 18080
+    }
+  }
+}
