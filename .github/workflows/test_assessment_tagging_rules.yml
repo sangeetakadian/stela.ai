@@ -39,7 +39,9 @@ jobs:
           java-version: "17"
 
       - name: Install rules test dependencies
-        run: npm ci --prefix frontend/rules_tests
+        working-directory: frontend/rules_tests
+        run: npm ci
 
       - name: Run rules tests in the Firebase Emulator
-        run: npm run test:emulator --prefix frontend/rules_tests
+        working-directory: frontend/rules_tests
+        run: npm run test:emulator
