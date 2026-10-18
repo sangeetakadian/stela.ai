@@ -144,7 +144,7 @@ No pilot Firebase/Vercel projects or pilot credentials are configured yet. This 
 1. Create a separate Firebase project for the professor-facing pilot. Never select the existing `stela23-f9a52` project.
 2. Enable Firebase Authentication email/password sign-in and create one pilot faculty account and one pilot student account.
 3. Initialize Realtime Database, Firestore, and Storage in the pilot project. Record its project ID and RTDB URL/region.
-4. Register a Web app and copy its public Firebase web configuration into both (a) the Vercel Preview environment variables and (b) GitHub Actions Variables for pilot build validation. Required names: `PILOT_FIREBASE_API_KEY`, `PILOT_FIREBASE_APP_ID`, `PILOT_FIREBASE_MESSAGING_SENDER_ID`, `PILOT_FIREBASE_PROJECT_ID`, `PILOT_FIREBASE_DATABASE_URL`, `PILOT_FIREBASE_AUTH_DOMAIN`, `PILOT_FIREBASE_STORAGE_BUCKET`; `PILOT_FIREBASE_MEASUREMENT_ID` is optional. Also set `CODE_EXEC_ENDPOINT` in the dedicated Vercel project's Preview environment and `PILOT_CODE_EXEC_ENDPOINT` as a GitHub Actions Variable.
+4. Register a Web app and copy its public Firebase web configuration into both (a) the Vercel Preview environment variables and (b) GitHub Actions Variables for pilot build validation. Required names: `PILOT_FIREBASE_API_KEY`, `PILOT_FIREBASE_APP_ID`, `PILOT_FIREBASE_MESSAGING_SENDER_ID`, `PILOT_FIREBASE_PROJECT_ID`, `PILOT_FIREBASE_DATABASE_URL`, `PILOT_FIREBASE_AUTH_DOMAIN`, `PILOT_FIREBASE_STORAGE_BUCKET`; `PILOT_FIREBASE_MEASUREMENT_ID` is optional. Set `ISTELA_ASSESSMENT_PILOT_BUILD=true` only in the dedicated pilot Vercel project's Preview environment; ordinary Preview builds do not use pilot Firebase settings. Also set `CODE_EXEC_ENDPOINT` in the dedicated Vercel project's Preview environment and `PILOT_CODE_EXEC_ENDPOINT` as a GitHub Actions Variable.
 5. Confirm which pilot account is faculty and its subject key. Use a trusted Admin SDK operator (Application Default Credentials with minimum necessary IAM) to provision its custom claims using the guarded CLI. Never put service-account JSON in the repository or send it in chat.
 6. The Emulator CI job requires Java 17+; the GitHub Actions workflow provisions this runtime.
 
@@ -182,7 +182,7 @@ Validation for this checkpoint:
 
 - `cd frontend && flutter test test/assessment_feedback_service_test.dart test/assessment_tagging_service_test.dart test/assessment_tagging_test.dart test/assessment_tagging_ui_test.dart test/taxonomy_service_test.dart test/widget_test.dart` — **30 passed**.
 - `cd frontend && flutter build web --release` with non-live dummy pilot Dart defines — **build succeeded**. Flutter reports the existing WebAssembly dry-run incompatibility from `universal_html`/`dart:html`; the normal web release build completes.
-- `cd frontend/rules_tests && npm run test:build-config && npm run test:claims` — **9 passed**.
+- `cd frontend/rules_tests && npm run test:build-config && npm run test:claims` — **11 passed**, including ordinary Preview isolation and pilot-only Preview enforcement.
 - `cd frontend/rules_tests && npm run test:emulator` — **blocked before test execution** because Java is missing from this local task-runner environment. The pilot rules remain unverified.
 
 No pilot URL is available yet. A dedicated pilot Firebase project and a separate Vercel project, authorized test accounts, and their configuration/access are required before deployment and real faculty/student smoke testing. The current Flutter build used dummy values only and did not connect to Firebase.

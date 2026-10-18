@@ -37,6 +37,7 @@ function runBuild(env) {
 
 const validPilotEnvironment = {
   VERCEL_ENV: 'preview',
+  ISTELA_ASSESSMENT_PILOT_BUILD: 'true',
   CODE_EXEC_ENDPOINT: 'https://pilot.example/execute',
   PILOT_FIREBASE_API_KEY: 'pilot-api-key',
   PILOT_FIREBASE_APP_ID: '1:123:web:pilot',
@@ -88,4 +89,25 @@ test('non-Preview build does not pass pilot Firebase configuration', () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /--dart-define=CODE_EXEC_ENDPOINT=/);
   assert.doesNotMatch(result.stdout, /PILOT_FIREBASE_PROJECT_ID/);
+});
+
+test('ordinary Vercel Preview builds do not require pilot configuration', () => {
+  const result = runBuild({
+    VERCEL_ENV: 'preview',
+    CODE_EXEC_ENDPOINT: 'https://existing-preview.example/execute',
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /--dart-define=CODE_EXEC_ENDPOINT=/);
+  assert.doesNotMatch(result.stdout, /PILOT_FIREBASE_PROJECT_ID/);
+});
+
+test('pilot configuration cannot be used in a production build', () => {
+  const result = runBuild({
+    ...validPilotEnvironment,
+    VERCEL_ENV: 'production',
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /only allowed in the Vercel Preview environment/);
 });

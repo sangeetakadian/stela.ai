@@ -6,10 +6,15 @@ if [[ -z "${CODE_EXEC_ENDPOINT:-}" ]]; then
   exit 1
 fi
 
-if [[ "${VERCEL_ENV:-}" != "preview" ]]; then
+if [[ "${ISTELA_ASSESSMENT_PILOT_BUILD:-}" != "true" ]]; then
   flutter build web --release \
     --dart-define=CODE_EXEC_ENDPOINT="$CODE_EXEC_ENDPOINT"
   exit
+fi
+
+if [[ "${VERCEL_ENV:-}" != "preview" ]]; then
+  echo "Assessment pilot builds are only allowed in the Vercel Preview environment." >&2
+  exit 1
 fi
 
 required_pilot_variables=(
