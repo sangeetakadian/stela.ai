@@ -20,7 +20,7 @@ class Splash extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           const Text(
-            'STELA 7.0',
+            'STELA 8.0',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,

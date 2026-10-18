@@ -10,5 +10,6 @@ void main() {
 
     expect(find.byType(MaterialApp), findsOneWidget);
     expect(find.byType(Splash), findsOneWidget);
+    expect(find.text('STELA 8.0'), findsOneWidget);
   });
 }
