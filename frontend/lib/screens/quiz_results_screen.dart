@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:stela_app/widgets/code_editor_widget.dart';
 import 'package:stela_app/models/quiz_model.dart';
+import '../models/assessment_tagging.dart';
+import '../services/assessment_feedback_service.dart';
 
 class QuizResultsScreen extends StatefulWidget {
   final Map<String, dynamic> quiz;
@@ -16,6 +18,9 @@ class QuizResultsScreen extends StatefulWidget {
   final Map<int, String> codingAnswers;
   final Map<int, ProgrammingLanguage> codingLanguages;
   final Map<int, String> subjectiveAnswers;
+  final List<double> earnedMarksByQuestion;
+  final List<double> possibleMarksByQuestion;
+  final Map<String, TaxonomyNode> taxonomyNodes;
   const QuizResultsScreen({
     Key? key,
     required this.quiz,
@@ -30,6 +35,9 @@ class QuizResultsScreen extends StatefulWidget {
     this.codingAnswers = const {},
     this.codingLanguages = const {},
     this.subjectiveAnswers = const {},
+    this.earnedMarksByQuestion = const [],
+    this.possibleMarksByQuestion = const [],
+    this.taxonomyNodes = const {},
   }) : super(key: key);
 
   @override
@@ -37,7 +45,6 @@ class QuizResultsScreen extends StatefulWidget {
 }
 
 class _QuizResultsScreenState extends State<QuizResultsScreen> {
-
   final Map<int, double> _codingScores = <int, double>{};
   final Map<int, int> _codingPassed = <int, int>{};
   final Map<int, int> _codingTotal = <int, int>{};
@@ -57,6 +64,14 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
     return (widget.correctAnswers / denom) * 100.0;
   }
 
+  List<AssessmentFeedbackItem> get _assessmentFeedback =>
+      AssessmentFeedbackService.summarizeQuiz(
+        questions: widget.questions,
+        earnedMarksByQuestion: widget.earnedMarksByQuestion,
+        possibleMarksByQuestion: widget.possibleMarksByQuestion,
+        taxonomyNodes: widget.taxonomyNodes,
+      );
+
   @override
   void initState() {
     super.initState();
@@ -73,8 +88,10 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
         final code = widget.codingAnswers[i] ?? '';
         final testCases = (q['testCases'] ?? []) as List;
         final solutionCode = q['solutionCode']?.toString() ?? '';
-        final studentLanguage = widget.codingLanguages[i] ?? _getProgrammingLanguage(q['language']?.toString());
-        final facultyLanguage = _getProgrammingLanguage(q['language']?.toString());
+        final studentLanguage = widget.codingLanguages[i] ??
+            _getProgrammingLanguage(q['language']?.toString());
+        final facultyLanguage =
+            _getProgrammingLanguage(q['language']?.toString());
 
         if (code.trim().isEmpty) {
           _codingScores[i] = 0.0;
@@ -95,7 +112,8 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
           final passed = results.where((r) => r.isPassed).length;
           _codingPassed[i] = passed;
           _codingTotal[i] = testCases.length;
-          _codingScores[i] = testCases.isEmpty ? 0.0 : (passed / testCases.length);
+          _codingScores[i] =
+              testCases.isEmpty ? 0.0 : (passed / testCases.length);
         } else {
           // No test cases and no solution code: cannot grade reliably
           _codingPassed[i] = 0;
@@ -133,7 +151,11 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
 
   double _questionMaxMarks(Map<String, dynamic> question) {
     final type = (question['type'] ?? '').toString();
-    if (type == 'coding' || type == 'subjective' || type == 'image' || type == 'mcq' || type.isEmpty) {
+    if (type == 'coding' ||
+        type == 'subjective' ||
+        type == 'image' ||
+        type == 'mcq' ||
+        type.isEmpty) {
       final v = question['marks'];
       if (v is int) return v.toDouble();
       if (v is double) return v;
@@ -168,7 +190,8 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
     for (final keyword in keywords) {
       final escaped = RegExp.escape(keyword.trim());
       if (escaped.isEmpty) continue;
-      final pattern = RegExp(r'(^|[^a-z0-9])' + escaped + r'([^a-z0-9]|$)', caseSensitive: false);
+      final pattern = RegExp(r'(^|[^a-z0-9])' + escaped + r'([^a-z0-9]|$)',
+          caseSensitive: false);
       if (pattern.hasMatch(normalizedAnswer)) {
         matched.add(keyword);
       }
@@ -189,7 +212,7 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
             color: Colors.white,
           ),
         ),
-  backgroundColor: widget.subject['color'],
+        backgroundColor: widget.subject['color'],
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.close, color: Colors.white),
@@ -226,7 +249,7 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
                     textAlign: TextAlign.center,
                   ),
                   SizedBox(height: 16),
-                  
+
                   // Score circle
                   Container(
                     width: 100,
@@ -250,7 +273,9 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
-                            color: _overallPercentage >= 70 ? Colors.green : Colors.orange,
+                            color: _overallPercentage >= 70
+                                ? Colors.green
+                                : Colors.orange,
                             fontFamily: 'PTSerif',
                           ),
                         ),
@@ -266,7 +291,7 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
                     ),
                   ),
                   SizedBox(height: 12),
-                  
+
                   // Performance message
                   Text(
                     _getPerformanceMessage(),
@@ -281,7 +306,7 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
               ),
             ),
           ),
-          
+
           // Statistics cards
           Padding(
             padding: EdgeInsets.all(12),
@@ -316,7 +341,9 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
               ],
             ),
           ),
-          
+
+          _buildAssessmentFeedbackCard(),
+
           // Question-wise analysis header
           Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
@@ -337,7 +364,7 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
             ),
           ),
           SizedBox(height: 8),
-          
+
           // Question-wise results
           Expanded(
             child: ListView.builder(
@@ -348,66 +375,79 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
               },
             ),
           ),
-          
+
           // Action buttons
           Padding(
             padding: EdgeInsets.all(16),
             child: Row(
               children: [
-                      Expanded(
-                        child: Column(
-                          children: [
-                            ElevatedButton.icon(
-                              onPressed: () {
-                                Navigator.pop(context); // Go back to subject detail
-                              },
-                              icon: Icon(Icons.home, size: 20),
-                              label: Text(
-                                'Back to Subject',
-                                style: TextStyle(fontFamily: 'PTSerif', fontSize: 15, fontWeight: FontWeight.w600),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: widget.subject['color'],
-                                foregroundColor: Colors.white,
-                                padding: EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                elevation: 2,
-                              ),
-                            ),
-                            SizedBox(height: 8),
-                            // Feedback button
-                            ElevatedButton.icon(
-                              onPressed: () async {
-                                final uri = Uri.parse('https://docs.google.com/forms/d/e/1FAIpQLSe4S0tVb06rrhOYuMaBdAfJaH0UtUslYvfTQcWw67feXAOeLw/viewform?usp=dialog');
-                                try {
-                                  if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open feedback form.')));
-                                  }
-                                } catch (e) {
-                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error opening feedback form.')));
-                                }
-                              },
-                              icon: Icon(Icons.feedback, size: 20),
-                              label: Text(
-                                'Give Feedback',
-                                style: TextStyle(fontFamily: 'PTSerif', fontSize: 15, fontWeight: FontWeight.w600),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: widget.subject['color'],
-                                padding: EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  side: BorderSide(color: widget.subject['color']),
-                                ),
-                                elevation: 0,
-                              ),
-                            ),
-                          ],
+                Expanded(
+                  child: Column(
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context); // Go back to subject detail
+                        },
+                        icon: Icon(Icons.home, size: 20),
+                        label: Text(
+                          'Back to Subject',
+                          style: TextStyle(
+                              fontFamily: 'PTSerif',
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: widget.subject['color'],
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 2,
                         ),
                       ),
+                      SizedBox(height: 8),
+                      // Feedback button
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          final uri = Uri.parse(
+                              'https://docs.google.com/forms/d/e/1FAIpQLSe4S0tVb06rrhOYuMaBdAfJaH0UtUslYvfTQcWw67feXAOeLw/viewform?usp=dialog');
+                          try {
+                            if (!await launchUrl(uri,
+                                mode: LaunchMode.externalApplication)) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                      content: Text(
+                                          'Could not open feedback form.')));
+                            }
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('Error opening feedback form.')));
+                          }
+                        },
+                        icon: Icon(Icons.feedback, size: 20),
+                        label: Text(
+                          'Give Feedback',
+                          style: TextStyle(
+                              fontFamily: 'PTSerif',
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: widget.subject['color'],
+                          padding: EdgeInsets.symmetric(
+                              vertical: 12, horizontal: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: widget.subject['color']),
+                          ),
+                          elevation: 0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -416,7 +456,8 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
     );
   }
 
-  Widget _buildStatCard(String title, String value, Color color, IconData icon) {
+  Widget _buildStatCard(
+      String title, String value, Color color, IconData icon) {
     return Container(
       padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -457,6 +498,72 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
     );
   }
 
+  Widget _buildAssessmentFeedbackCard() {
+    final feedback = _assessmentFeedback;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Assessment evidence',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'A summary of reviewed tags for this quiz only; it is not a measure of overall ability.',
+              ),
+              const SizedBox(height: 8),
+              if (feedback.isEmpty)
+                const Text('Not assessed')
+              else ...[
+                if (!feedback.any(
+                  (item) => item.kind == TaxonomyNodeKind.concept,
+                ))
+                  const Text('Concepts: Not assessed'),
+                if (!feedback.any(
+                  (item) => item.kind == TaxonomyNodeKind.skill,
+                ))
+                  const Text('Skills: Not assessed'),
+                ...feedback.map((item) {
+                  final canShowScore = item.possibleMarks > 0 &&
+                      (item.kind == TaxonomyNodeKind.concept ||
+                          item.status == 'Based on this quiz');
+                  final scoreText = canShowScore
+                      ? '${_fmtScore(item.earnedMarks)}/${_fmtScore(item.possibleMarks)} (${(item.ratio * 100).toStringAsFixed(0)}%)'
+                      : item.status;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${item.kind == TaxonomyNodeKind.concept ? 'Concept' : 'Skill'}: ${item.label}',
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            '$scoreText • ${item.distinctQuestionCount} item(s)',
+                            textAlign: TextAlign.right,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildQuestionCard(int index) {
     final question = widget.questions[index];
     final userAnswer = widget.userAnswers[index];
@@ -464,46 +571,73 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
     final correctAnswer = question['correct'];
 
     final bool isCoding = type == 'coding';
-    final bool isImageMcq = type == 'image' && (question['imageAnswerType'] ?? 'subjective').toString() == 'mcq';
-    final bool isSubjective = type == 'subjective' || (type == 'image' && (question['imageAnswerType'] ?? 'subjective').toString() == 'subjective');
+    final bool isImageMcq = type == 'image' &&
+        (question['imageAnswerType'] ?? 'subjective').toString() == 'mcq';
+    final bool isSubjective = type == 'subjective' ||
+        (type == 'image' &&
+            (question['imageAnswerType'] ?? 'subjective').toString() ==
+                'subjective');
     final double? codingScore = isCoding ? _codingScores[index] : null;
     final double maxMarks = _questionMaxMarks(question);
-    final String subjectiveAnswer = isSubjective ? ((widget.subjectiveAnswers[index] ?? '').toString()) : '';
-    final List<String> subjectiveKeywords = isSubjective ? _extractQuestionKeywords(question) : const <String>[];
+    final String subjectiveAnswer = isSubjective
+        ? ((widget.subjectiveAnswers[index] ?? '').toString())
+        : '';
+    final List<String> subjectiveKeywords =
+        isSubjective ? _extractQuestionKeywords(question) : const <String>[];
     final List<String> matchedKeywords = isSubjective
-      ? _matchKeywordsInAnswer(subjectiveAnswer, subjectiveKeywords)
-      : const <String>[];
-    final double subjectiveScore = (isSubjective && subjectiveKeywords.isNotEmpty)
-      ? (matchedKeywords.length / subjectiveKeywords.length) * maxMarks
-      : 0.0;
+        ? _matchKeywordsInAnswer(subjectiveAnswer, subjectiveKeywords)
+        : const <String>[];
+    final double subjectiveScore =
+        (isSubjective && subjectiveKeywords.isNotEmpty)
+            ? (matchedKeywords.length / subjectiveKeywords.length) * maxMarks
+            : 0.0;
 
-    final bool isMcqCorrect = ((!isCoding && !isSubjective) || isImageMcq) && userAnswer != null && correctAnswer != null && userAnswer == correctAnswer;
+    final bool isMcqCorrect = ((!isCoding && !isSubjective) || isImageMcq) &&
+        userAnswer != null &&
+        correctAnswer != null &&
+        userAnswer == correctAnswer;
     final double earnedMarks = isCoding
-      ? ((codingScore ?? 0.0) * maxMarks)
-      : isSubjective
-        ? subjectiveScore
-        : (isMcqCorrect ? maxMarks : 0.0);
+        ? ((codingScore ?? 0.0) * maxMarks)
+        : isSubjective
+            ? subjectiveScore
+            : (isMcqCorrect ? maxMarks : 0.0);
 
     final bool isFullCorrect = isCoding
-      ? ((codingScore ?? 0.0) >= 0.999)
-      : (isSubjective ? (subjectiveKeywords.isNotEmpty && matchedKeywords.length == subjectiveKeywords.length) : isMcqCorrect);
-    final bool isPartial = isCoding && _codingEvaluated && (codingScore ?? 0.0) > 0.0 && (codingScore ?? 0.0) < 0.999;
+        ? ((codingScore ?? 0.0) >= 0.999)
+        : (isSubjective
+            ? (subjectiveKeywords.isNotEmpty &&
+                matchedKeywords.length == subjectiveKeywords.length)
+            : isMcqCorrect);
+    final bool isPartial = isCoding &&
+        _codingEvaluated &&
+        (codingScore ?? 0.0) > 0.0 &&
+        (codingScore ?? 0.0) < 0.999;
     final bool isCorrect = isFullCorrect;
 
-    final bool isSubjectiveUngraded = isSubjective && subjectiveKeywords.isEmpty;
-    final bool isPartialSubjective = isSubjective && subjectiveKeywords.isNotEmpty && matchedKeywords.isNotEmpty && matchedKeywords.length < subjectiveKeywords.length;
+    final bool isSubjectiveUngraded =
+        isSubjective && subjectiveKeywords.isEmpty;
+    final bool isPartialSubjective = isSubjective &&
+        subjectiveKeywords.isNotEmpty &&
+        matchedKeywords.isNotEmpty &&
+        matchedKeywords.length < subjectiveKeywords.length;
     final bool isUngraded = isSubjectiveUngraded;
 
     final Color borderColor = isUngraded
-      ? Colors.blueGrey
-      : ((isPartial || isPartialSubjective) ? Colors.orange : (isFullCorrect ? Colors.green : Colors.red));
+        ? Colors.blueGrey
+        : ((isPartial || isPartialSubjective)
+            ? Colors.orange
+            : (isFullCorrect ? Colors.green : Colors.red));
     final IconData statusIcon = isUngraded
-      ? Icons.pending_actions
-      : ((isPartial || isPartialSubjective) ? Icons.change_circle : (isFullCorrect ? Icons.check_circle : Icons.cancel));
+        ? Icons.pending_actions
+        : ((isPartial || isPartialSubjective)
+            ? Icons.change_circle
+            : (isFullCorrect ? Icons.check_circle : Icons.cancel));
     final String statusText = isUngraded
         ? 'Ungraded'
-        : ((isPartial || isPartialSubjective) ? 'Partial' : (isFullCorrect ? 'Correct' : 'Incorrect'));
-    
+        : ((isPartial || isPartialSubjective)
+            ? 'Partial'
+            : (isFullCorrect ? 'Correct' : 'Incorrect'));
+
     return Container(
       margin: EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -571,7 +705,7 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
               ],
             ),
             SizedBox(height: 12),
-            
+
             // Question text
             Text(
               question['question'] ?? '',
@@ -582,9 +716,12 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
               ),
             ),
             SizedBox(height: 12),
-            
+
             // Image for image questions
-            if (type == 'image' && (question['imageQuestionContent'] ?? '').toString().isNotEmpty) ...[
+            if (type == 'image' &&
+                (question['imageQuestionContent'] ?? '')
+                    .toString()
+                    .isNotEmpty) ...[
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Image.network(
@@ -604,7 +741,7 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
               ),
               SizedBox(height: 12),
             ],
-            
+
             // Answer details
             if (isCoding) ...[
               Container(
@@ -655,76 +792,83 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
                     SizedBox(height: 8),
                     Text(
                       'Your answer:',
-                      style: TextStyle(fontFamily: 'PTSerif', fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                          fontFamily: 'PTSerif', fontWeight: FontWeight.bold),
                     ),
                     SizedBox(height: 4),
                     Text(
-                      subjectiveAnswer.trim().isEmpty ? '(No answer submitted)' : subjectiveAnswer,
+                      subjectiveAnswer.trim().isEmpty
+                          ? '(No answer submitted)'
+                          : subjectiveAnswer,
                       style: TextStyle(fontFamily: 'PTSerif'),
                     ),
                   ],
                 ),
               ),
-            ] else ...List.generate(question['options']?.length ?? 0, (optionIndex) {
-              final option = question['options'][optionIndex];
-              final isUserAnswer = userAnswer == optionIndex;
-              final isCorrectAnswer = correctAnswer == optionIndex;
-              
-              Color optionColor = Colors.grey[200]!;
-              Color textColor = Colors.black;
-              IconData? optionIcon;
-              
-              if (isCorrectAnswer) {
-                optionColor = Colors.green.withOpacity(0.2);
-                textColor = Colors.green[800]!;
-                optionIcon = Icons.check_circle;
-              } else if (isUserAnswer && !isCorrect) {
-                optionColor = Colors.red.withOpacity(0.2);
-                textColor = Colors.red[800]!;
-                optionIcon = Icons.cancel;
-              }
-              
-              return Container(
-                margin: EdgeInsets.only(bottom: 8),
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: optionColor,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: isCorrectAnswer ? Colors.green : 
-                           (isUserAnswer && !isCorrect) ? Colors.red : Colors.transparent,
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      '${String.fromCharCode(65 + optionIndex)}. ',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
-                        fontFamily: 'PTSerif',
-                      ),
+            ] else
+              ...List.generate(question['options']?.length ?? 0, (optionIndex) {
+                final option = question['options'][optionIndex];
+                final isUserAnswer = userAnswer == optionIndex;
+                final isCorrectAnswer = correctAnswer == optionIndex;
+
+                Color optionColor = Colors.grey[200]!;
+                Color textColor = Colors.black;
+                IconData? optionIcon;
+
+                if (isCorrectAnswer) {
+                  optionColor = Colors.green.withOpacity(0.2);
+                  textColor = Colors.green[800]!;
+                  optionIcon = Icons.check_circle;
+                } else if (isUserAnswer && !isCorrect) {
+                  optionColor = Colors.red.withOpacity(0.2);
+                  textColor = Colors.red[800]!;
+                  optionIcon = Icons.cancel;
+                }
+
+                return Container(
+                  margin: EdgeInsets.only(bottom: 8),
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: optionColor,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isCorrectAnswer
+                          ? Colors.green
+                          : (isUserAnswer && !isCorrect)
+                              ? Colors.red
+                              : Colors.transparent,
+                      width: 1,
                     ),
-                    Expanded(
-                      child: Text(
-                        option ?? '',
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        '${String.fromCharCode(65 + optionIndex)}. ',
                         style: TextStyle(
+                          fontWeight: FontWeight.bold,
                           color: textColor,
                           fontFamily: 'PTSerif',
                         ),
                       ),
-                    ),
-                    if (optionIcon != null)
-                      Icon(
-                        optionIcon,
-                        color: isCorrectAnswer ? Colors.green : Colors.red,
-                        size: 20,
+                      Expanded(
+                        child: Text(
+                          option ?? '',
+                          style: TextStyle(
+                            color: textColor,
+                            fontFamily: 'PTSerif',
+                          ),
+                        ),
                       ),
-                  ],
-                ),
-              );
-            }),
+                      if (optionIcon != null)
+                        Icon(
+                          optionIcon,
+                          color: isCorrectAnswer ? Colors.green : Colors.red,
+                          size: 20,
+                        ),
+                    ],
+                  ),
+                );
+              }),
           ],
         ),
       ),

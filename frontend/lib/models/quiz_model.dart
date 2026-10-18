@@ -20,11 +20,11 @@ class QuizQuestion {
 
   // Optional image for the question prompt (works for any type)
   final String? imageUrl;
-  
+
   // MCQ specific fields
   final List<String>? options;
   final int? correctOptionIndex;
-  
+
   // Coding specific fields
   final ProgrammingLanguage? language;
   final List<TestCase>? testCases;
@@ -34,11 +34,16 @@ class QuizQuestion {
   // Subjective specific fields
   final String? expectedAnswer;
   final List<String>? keywords;
-  
+
   // Image question specific fields
   final String? imageQuestionContent; // Image URL for image-based questions (primary content)
   final String? imageAnswerType; // "mcq" or "subjective" for image questions
-  
+
+  // Additional metadata that must survive round-trips even when the app does not
+  // know the keys in advance. This preserves future/question-tagging fields without
+  // rewriting the legacy serialised payload.
+  final Map<String, dynamic> extraFields;
+
   QuizQuestion({
     required this.id,
     required this.type,
@@ -58,6 +63,7 @@ class QuizQuestion {
     // Image question fields
     this.imageQuestionContent,
     this.imageAnswerType,
+    this.extraFields = const {},
   });
 
   // Factory constructor for MCQ questions
@@ -156,6 +162,42 @@ class QuizQuestion {
   }
 
   // Convert to Map for Firebase storage
+  QuizQuestion copyWith({
+    String? id,
+    QuestionType? type,
+    String? question,
+    String? imageUrl,
+    List<String>? options,
+    int? correctOptionIndex,
+    ProgrammingLanguage? language,
+    List<TestCase>? testCases,
+    String? expectedOutput,
+    String? solutionCode,
+    String? expectedAnswer,
+    List<String>? keywords,
+    String? imageQuestionContent,
+    String? imageAnswerType,
+    Map<String, dynamic>? extraFields,
+  }) {
+    return QuizQuestion(
+      id: id ?? this.id,
+      type: type ?? this.type,
+      question: question ?? this.question,
+      imageUrl: imageUrl ?? this.imageUrl,
+      options: options ?? this.options,
+      correctOptionIndex: correctOptionIndex ?? this.correctOptionIndex,
+      language: language ?? this.language,
+      testCases: testCases ?? this.testCases,
+      expectedOutput: expectedOutput ?? this.expectedOutput,
+      solutionCode: solutionCode ?? this.solutionCode,
+      expectedAnswer: expectedAnswer ?? this.expectedAnswer,
+      keywords: keywords ?? this.keywords,
+      imageQuestionContent: imageQuestionContent ?? this.imageQuestionContent,
+      imageAnswerType: imageAnswerType ?? this.imageAnswerType,
+      extraFields: extraFields ?? this.extraFields,
+    );
+  }
+
   Map<String, dynamic> toMap() {
     Map<String, dynamic> map = {
       'id': id,
@@ -168,8 +210,8 @@ class QuizQuestion {
     }
 
     if (type == QuestionType.mcq) {
-      map['options'] = options;
-      map['correct'] = correctOptionIndex;
+      map['options'] = options ?? const [];
+      map['correct'] = correctOptionIndex ?? 0;
     } else if (type == QuestionType.coding) {
       map['language'] = language?.name;
       map['testCases'] = testCases?.map((tc) => tc.toMap()).toList();
@@ -192,11 +234,11 @@ class QuizQuestion {
       if (imageQuestionContent != null && imageQuestionContent!.trim().isNotEmpty) {
         map['imageQuestionContent'] = imageQuestionContent;
       }
-      map['imageAnswerType'] = imageAnswerType;
-      
+      map['imageAnswerType'] = imageAnswerType ?? 'subjective';
+
       if (imageAnswerType == 'mcq') {
-        map['options'] = options;
-        map['correct'] = correctOptionIndex;
+        map['options'] = options ?? const [];
+        map['correct'] = correctOptionIndex ?? 0;
       } else if (imageAnswerType == 'subjective') {
         if (expectedAnswer != null && expectedAnswer!.trim().isNotEmpty) {
           map['expectedAnswer'] = expectedAnswer;
@@ -213,11 +255,42 @@ class QuizQuestion {
       }
     }
 
+    for (final entry in extraFields.entries) {
+      if (!map.containsKey(entry.key)) {
+        map[entry.key] = entry.value;
+      }
+    }
+
     return map;
   }
 
   // Create from Map (Firebase data)
   factory QuizQuestion.fromMap(Map<String, dynamic> map) {
+    final rawExtra = <String, dynamic>{};
+    const knownKeys = <String>{
+      'id',
+      'type',
+      'question',
+      'imageUrl',
+      'options',
+      'correct',
+      'language',
+      'testCases',
+      'expectedOutput',
+      'solutionCode',
+      'expectedAnswer',
+      'keywords',
+      'imageQuestionContent',
+      'imageAnswerType',
+    };
+
+    map.forEach((rawKey, value) {
+      final key = rawKey.toString();
+      if (!knownKeys.contains(key)) {
+        rawExtra[key] = value;
+      }
+    });
+
     final typeStr = map['type'] as String?;
     final type = switch (typeStr) {
       'coding' => QuestionType.coding,
@@ -229,44 +302,54 @@ class QuizQuestion {
     final String? imageUrl = map['imageUrl']?.toString();
 
     if (type == QuestionType.mcq) {
-      return QuizQuestion.mcq(
+      return QuizQuestion(
         id: map['id'] ?? '',
+        type: QuestionType.mcq,
         question: map['question'] ?? '',
         imageUrl: imageUrl,
-        options: List<String>.from(map['options'] ?? []),
+        options: List<String>.from(map['options'] ?? const []),
         correctOptionIndex: map['correct'] ?? 0,
+        extraFields: rawExtra,
       );
     } else if (type == QuestionType.subjective) {
-      return QuizQuestion.subjective(
+      return QuizQuestion(
         id: map['id'] ?? '',
+        type: QuestionType.subjective,
         question: map['question'] ?? '',
         imageUrl: imageUrl,
         expectedAnswer: map['expectedAnswer']?.toString(),
         keywords: (map['keywords'] as List<dynamic>?)
             ?.map((k) => k.toString())
             .toList(),
+        extraFields: rawExtra,
       );
     } else if (type == QuestionType.image) {
       final imageAnswerType = map['imageAnswerType'] as String? ?? 'subjective';
       final String? imageQuestionContent = map['imageQuestionContent']?.toString();
-      
+
       if (imageAnswerType == 'mcq') {
-        return QuizQuestion.imageMCQ(
+        return QuizQuestion(
           id: map['id'] ?? '',
+          type: QuestionType.image,
           question: map['question'] ?? '',
           imageQuestionContent: imageQuestionContent ?? '',
-          options: List<String>.from(map['options'] ?? []),
+          imageAnswerType: 'mcq',
+          options: List<String>.from(map['options'] ?? const []),
           correctOptionIndex: map['correct'] ?? 0,
+          extraFields: rawExtra,
         );
       } else {
-        return QuizQuestion.imageSubjective(
+        return QuizQuestion(
           id: map['id'] ?? '',
+          type: QuestionType.image,
           question: map['question'] ?? '',
           imageQuestionContent: imageQuestionContent ?? '',
+          imageAnswerType: 'subjective',
           expectedAnswer: map['expectedAnswer']?.toString(),
           keywords: (map['keywords'] as List<dynamic>?)
               ?.map((k) => k.toString())
               .toList(),
+          extraFields: rawExtra,
         );
       }
     } else {
@@ -278,13 +361,14 @@ class QuizQuestion {
             (e) => e.name == langStr,
             orElse: () => ProgrammingLanguage.python,
           );
-        } catch (e) {
+        } catch (_) {
           lang = ProgrammingLanguage.python;
         }
       }
 
-      return QuizQuestion.coding(
+      return QuizQuestion(
         id: map['id'] ?? '',
+        type: QuestionType.coding,
         question: map['question'] ?? '',
         imageUrl: imageUrl,
         language: lang,
@@ -293,6 +377,7 @@ class QuizQuestion {
             .toList(),
         expectedOutput: map['expectedOutput'],
         solutionCode: map['solutionCode'],
+        extraFields: rawExtra,
       );
     }
   }
