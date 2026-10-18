@@ -77,9 +77,9 @@ The status table below is the release source of truth; implementation or unit te
 | Additive sidecar persistence and legacy quiz payload preservation | Unit-tested | `assessment_tagging_service_test.dart` and `assessment_tagging_test.dart`; real old-client coexistence is not verified. |
 | Reopen and stale-fingerprint handling | Unit-tested | Tagging-service tests cover stable/changed fingerprints and metadata preservation; UI save/reopen is not Emulator-verified. |
 | Student scoring identity, evidence attribution, threshold and abstention | Unit-tested | `assessment_feedback_service_test.dart` covers reviewed/primary tags, invalid/stale mappings, duplicate identity, skill threshold, missing score data, and parent-roll-up deduplication. Randomized end-to-end score alignment remains unverified. |
-| RTDB rules use trusted role claims and restrict assigned faculty to one subject key | Implemented | `database.rules.json` checks `assessmentFaculty`, `assessmentSubjectKey`, `assessmentAdmin`, and `taxonomySteward`; rules are not yet Emulator-verified. |
+| RTDB rules use trusted role claims and restrict assigned faculty to one subject key | Emulator-verified | The allow/deny matrix passed in GitHub Actions run `39118782771`, including assigned/cross-course faculty, missing claims, student read/write restrictions, and admin/steward access. |
 | Trusted Admin SDK role/course claim provisioning | Unit-tested | A guarded CLI tool supports explicit pilot-account claims via ADC in `frontend/rules_tests/provision_assessment_claims.mjs`; it does not infer roles from client-created Firestore documents. The institution must still approve the role/course roster and an authorized operator must apply claims. |
-| Rules denial/allow matrix in Firebase Emulator | Blocked | `cd frontend/rules_tests && npm run test:emulator` stops before tests because Firebase CLI cannot spawn `java -version`; no rules pass is claimed. |
+| Rules denial/allow matrix in Firebase Emulator | Emulator-verified | `test_assessment_tagging_rules.yml`, run `39118782771` on commit `ee6ec0294ef50ba9d42f1a6f2bf029ec9728616e`; CI uses Java 21. The local emulator command still cannot start because Java is unavailable locally. |
 | Existing quiz, both Excel imports, images, editing, randomization and old-client compatibility | Blocked | Unit coverage does not yet prove both import workflows, historical payload behavior, image flows, answer alignment, or repeated-import behavior end to end. |
 | Pilot build, deployment, smoke test and rollback record | Blocked | No dedicated pilot Firebase/Vercel project or pilot accounts are configured. No remote deployment has been made. |
 | Expert review, pilot approval, ethics and diagnostic evaluation | Blocked | These are external research decisions; software tests are not evidence of scientific validity. |
@@ -172,7 +172,7 @@ No pilot Firebase/Vercel projects or pilot credentials are configured yet. This 
 6. Run faculty sign-in, tag/save/reopen/edit, student attempt/evidence, and denied-user smoke checks; record the deployed Git commit and Firebase project ID.
 7. Roll back by restoring the prior Vercel Preview deployment and re-deploying the previously reviewed pilot RTDB rules. Keep the exact prior rules artifact with the pilot release record.
 
-No pilot deployment or scientific validation is claimed. The remaining pilot gates are approved pilot Firebase/Vercel projects and accounts, emulator verification, core integration/smoke checks, and review of the test-tool dependency audit. Software tests do not establish research validity.
+No pilot deployment or scientific validation is claimed. The remaining pilot gates are approved pilot Firebase/Vercel projects and accounts, deployed core-workflow smoke checks, and review of the test-tool dependency audit. Software tests do not establish research validity.
 
 ### Professor-demo UI checkpoint
 
@@ -180,9 +180,10 @@ The faculty question editor now presents an explicit **Tag concepts & skills** a
 
 Validation for this checkpoint:
 
-- `cd frontend && flutter test test/assessment_feedback_service_test.dart test/assessment_tagging_service_test.dart test/assessment_tagging_test.dart test/assessment_tagging_ui_test.dart test/taxonomy_service_test.dart test/widget_test.dart` — **30 passed**.
+- `cd frontend && flutter test test/assessment_feedback_service_test.dart test/assessment_tagging_service_test.dart test/assessment_tagging_test.dart test/assessment_tagging_ui_test.dart test/taxonomy_service_test.dart test/widget_test.dart` — **31 passed**.
+- Legacy quiz serialization strips tag/cache-only fields while preserving images and unknown question properties; covered by `assessment_tagging_service_test.dart`.
 - `cd frontend && flutter build web --release` with non-live dummy pilot Dart defines — **build succeeded**. Flutter reports the existing WebAssembly dry-run incompatibility from `universal_html`/`dart:html`; the normal web release build completes.
 - `cd frontend/rules_tests && npm run test:build-config && npm run test:claims` — **11 passed**, including ordinary Preview isolation and pilot-only Preview enforcement.
-- `cd frontend/rules_tests && npm run test:emulator` — **blocked before test execution** because Java is missing from this local task-runner environment. The pilot rules remain unverified.
+- `cd frontend/rules_tests && npm run test:emulator` remains blocked locally because Java is not installed; the rules Emulator suite **passed in GitHub Actions run `39118782771`** with Java 21.
 
 No pilot URL is available yet. A dedicated pilot Firebase project and a separate Vercel project, authorized test accounts, and their configuration/access are required before deployment and real faculty/student smoke testing. The current Flutter build used dummy values only and did not connect to Firebase.

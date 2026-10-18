@@ -70,6 +70,7 @@ jobs:
           test/assessment_tagging_test.dart
           test/assessment_tagging_ui_test.dart
           test/taxonomy_service_test.dart
+          test/widget_test.dart
 
       - name: Build pilot web app
         working-directory: frontend

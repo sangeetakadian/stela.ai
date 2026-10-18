@@ -118,5 +118,37 @@ void main() {
       expect(pathId, isNot(contains('.')));
       expect(pathId, startsWith('question_'));
     });
+
+    test('legacy question payload strips tag cache and preserves other fields',
+        () {
+      final questions = [
+        {
+          'id': 'legacy-q',
+          'type': 'image',
+          'question': 'What is shown?',
+          'imageQuestionContent': 'https://example.invalid/question.png',
+          'customLegacyField': {'preserve': true},
+          'assessmentTag': {
+            'conceptIds': ['c-1']
+          },
+          'assessmentTagStale': true,
+          'assessmentTagSourceFingerprint': 'qfp2_stale',
+        },
+      ];
+
+      final payload = AssessmentTaggingService.stripTagFields(questions);
+
+      expect(payload, hasLength(1));
+      expect(payload.single['id'], 'legacy-q');
+      expect(payload.single['imageQuestionContent'],
+          'https://example.invalid/question.png');
+      expect(payload.single['customLegacyField'], {'preserve': true});
+      expect(payload.single.keys, isNot(contains('assessmentTag')));
+      expect(payload.single.keys, isNot(contains('assessmentTagStale')));
+      expect(
+        payload.single.keys,
+        isNot(contains('assessmentTagSourceFingerprint')),
+      );
+    });
   });
 }

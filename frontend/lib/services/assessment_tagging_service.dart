@@ -19,7 +19,11 @@ class AssessmentTaggingService {
     for (final entry in questions) {
       if (entry is Map) {
         final clean = Map<String, dynamic>.from(entry);
-        clean.remove('assessmentTag');
+        clean.removeWhere((key, _) => const {
+              'assessmentTag',
+              'assessmentTagStale',
+              'assessmentTagSourceFingerprint',
+            }.contains(key));
         if (clean.isNotEmpty) {
           cleaned.add(clean);
         }
