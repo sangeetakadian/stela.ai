@@ -83,7 +83,7 @@ The status table below is the release source of truth; implementation or unit te
 | Current shared-project rules and feature-path authorization | Blocked | Firebase CLI reports no authorized accounts; an unauthenticated read of the RTDB rules endpoint returns HTTP 403. The active RTDB and Firestore rules therefore could not be inspected. No production rules or data were changed. |
 | Compatibility with other applications using the shared Firebase project | Blocked | The code keeps tagging metadata in sidecar paths and preserves legacy quiz fields, but older-app access under the active shared rules is unverified. Do not deploy the Emulator candidate rules as production rules: they are not a merge with the active rules and could deny unrelated paths. |
 | Existing quiz, both Excel imports, images, editing, randomization and old-client compatibility | Blocked | Unit coverage does not yet prove both import workflows, historical payload behavior, image flows, answer alignment, or repeated-import behavior end to end. |
-| Separate professor-facing Vercel deployment using current Firebase config | Blocked | The separate `stela-professor-pilot` Vercel project and Preview code-runner variable are configured, but no deployment URL has been verified. Active shared Firebase rules and an authorized professor/test-student account pair are still unavailable for end-to-end smoke testing. A separate Firebase project is not required. |
+| Separate professor-facing Vercel deployment using current Firebase config | Deployed; workflow blocked | The separate Preview deployment is live at [stela-professor-pilot-5m1hxgn6p-stelaai.vercel.app](https://stela-professor-pilot-5m1hxgn6p-stelaai.vercel.app/) from commit `1f036dd97b372741d58aa25ec6a979894390331e`. The app shell and Flutter canvas load, but a `manifest.json` request was redirected to Vercel SSO, so professor accessibility and authenticated faculty/student workflows are not confirmed. Active shared Firebase rules and authorized test accounts are still unavailable. |
 | Expert review, pilot approval, ethics and diagnostic evaluation | Blocked | These are external research decisions; software tests are not evidence of scientific validity. |
 
 ### Completed in this phase
@@ -95,14 +95,16 @@ The status table below is the release source of truth; implementation or unit te
 - Concept ancestor roll-up with per-question deduplication and abstention when taxonomy is unavailable
 - Candidate Emulator rules add quiz reads for authenticated users, claim-scoped faculty quiz writes, and student-owned attempt creation; these candidates are isolated from the normal Firebase deploy config
 - Normal Vercel builds continue using the checked-in shared-project Firebase options; the Preview validation build uses the existing code-execution backend
+- The dedicated professor-facing Vercel project has a successful Preview deployment; the existing production project and shared Firebase rules/data were not changed
+- App package version and splash label are both `8.0` (`8.0.0+8` package metadata)
 
 ### Remaining work, in release order
 
 1. Obtain authorized read access to the active RTDB and Firestore rules for `stela23-f9a52`, or have a Firebase administrator provide the current rules exports. Merge only the minimal necessary additive rules, if the active policy lacks the required operations, then validate the merged rules in the Emulator.
 2. Run the live workflow using an authorized professor account and a dedicated test quiz that does not alter existing quiz records; verify tag save/reopen/stale review and student attempt/evidence.
 3. Add end-to-end coverage for both Excel import paths, images, historical quiz data, randomized scoring alignment, and old-client coexistence.
-4. Create a separate Vercel project for the professor-facing Preview, configure it with the current Firebase options and code-execution endpoint, then deploy and verify its actual URL. Do not change the existing `stela_ai` deployment.
-6. Keep expert review, pilot approval, ethics, and empirical diagnostic validation as separate external gates.
+4. Confirm the Preview's access policy, then run the faculty and student workflows with authorized accounts and a dedicated test quiz. Do not change the existing `stela_ai` deployment.
+5. Keep expert review, pilot approval, ethics, and empirical diagnostic validation as separate external gates.
 
 ### Current continuation
 
@@ -110,9 +112,9 @@ The taxonomy editor now reads the Firebase registry instead of silently using a 
 
 The chosen authorization direction is Firebase Auth custom claims issued only by a trusted Admin SDK process. The draft rules require `assessmentFaculty: true` with an exact `assessmentSubjectKey` for faculty writes, or `assessmentAdmin: true` / `taxonomySteward: true` for stewarded cross-course writes. Students may read reviewed metadata and write only their own evidence. Claims are not provisioned by the app. A guarded operator CLI at `frontend/rules_tests/provision_assessment_claims.mjs` defaults to dry-run, requires exact project confirmation before applying, preserves unrelated claims, and can grant/revoke only the managed assessment claims. The existing UI resolves roles from Firestore, but both faculty signup flows write `userRole: 'Faculty'` from the client, so that field is not an authoritative approval source for privileged claims. Existing subject records are also created by their owning signed-in user. The CLI must only be used after the institution approves the account-to-course roster; missing claims deny protected writes.
 
-### Next implementation target
+### Current external gates
 
-The emulator allow/deny matrix still needs a Java 17+ runtime available to Firebase CLI. The institution must approve the staging faculty/admin/student roster and course key; an authorized operator can then use the guarded claims CLI. Historical review and broad old-client compatibility remain separate checks; no staging deployment is safe until authorization and compatibility gates pass.
+The Emulator allow/deny matrix has passed locally and in CI using Java 21, but it validates only the isolated candidate rules. The institution must provide access to the active shared-project rules and approve the faculty/admin/student roster and course key before any live writes or claims are attempted. Historical review and broad old-client compatibility remain separate checks.
 
 ### Latest implementation progress
 
@@ -134,7 +136,7 @@ Faculty edit/reopen now loads the same sidecar data. Stale mappings are shown fo
 
 The latest evidence increment rolls a reviewed concept association up through its taxonomy ancestors, while de-duplicating each scored question at each concept. Taxonomy is loaded alongside question tags before shuffling and passed to the result feedback service; without the registry, only directly tagged concept evidence is shown and no parent evidence is inferred. This enables users to see a cautious summary at broader concept levels without multiplying marks when a question has sibling concept tags.
 
-Current validation: the focused Flutter suite passes (31 tests); the web release build succeeds and embeds version `8.0.0` / build number `8`; the claims and Vercel routing suites pass (11 tests); and the RTDB/Firestore Emulator suite passes (22 tests) using Java 21. The build reports the existing WebAssembly dry-run incompatibility from `universal_html`/`dart:html`; normal web compilation succeeds. Emulator results validate only the checked-in test candidates, not the deployed shared Firebase rules. The deployed rules could not be read because Firebase CLI has no authorized account and the unauthenticated RTDB rules endpoint returns HTTP 403.
+Current validation: the focused Flutter suite passes (31 tests); the web release build succeeds and embeds version `8.0.0` / build number `8`; the claims and Vercel routing suites pass (11 tests); and the RTDB/Firestore Emulator suite passes (22 tests) using Java 21. Commit `1f036dd97b372741d58aa25ec6a979894390331e` also aligns the splash label with version `8.0`; its focused widget test passes. GitHub Actions run `39124080527` passed validation and deployed the Preview listed above. The build reports the existing WebAssembly dry-run incompatibility from `universal_html`/`dart:html`; normal web compilation succeeds. Emulator results validate only the checked-in test candidates, not the deployed shared Firebase rules. The deployed rules could not be read because Firebase CLI has no authorized account and the unauthenticated RTDB rules endpoint returns HTTP 403.
 
 ### Pilot deployment and rollback runbook
 
@@ -151,11 +153,11 @@ The professor-facing Preview should use the existing shared Firebase project and
 1. The separate `stela-professor-pilot` Vercel project is created; do not use `stela_ai` or `stela-exec-backend`. The app's checked-in default Firebase options point to `stela23-f9a52`.
 2. The Preview environment variable `CODE_EXEC_ENDPOINT` is set to `https://stela-exec-backend.vercel.app/execute`. Do not set `ISTELA_ASSESSMENT_PILOT_BUILD` or alternate `PILOT_FIREBASE_*` values for this shared-project deployment.
 3. GitHub Actions secrets `VERCEL_TOKEN`, `ASSESSMENT_PILOT_VERCEL_ORG_ID`, and `ASSESSMENT_PILOT_VERCEL_PROJECT_ID` are configured for the new Vercel project. The workflow refuses the existing production project ID.
-4. Deploy the feature branch to Preview only after confirming active Firebase rules and a safe professor/test-student account pair. Do not run `firebase deploy` from this branch until the active rules have been merged and reviewed.
-5. Open the generated Preview URL and test professor sign-in, quiz editor, tag save/reopen/stale review, student attempt/evidence, and an unauthorized denial. Record the commit and Preview URL.
+4. The feature branch has been deployed to Preview. Before any live writes, confirm active Firebase rules and use an authorized professor/test-student account pair. Do not run `firebase deploy` from this branch until the active rules have been merged and reviewed.
+5. The Preview root was opened in a browser and the Flutter app shell/canvas loaded. Vercel SSO behavior and professor sign-in, quiz editor, tag save/reopen/stale review, student attempt/evidence, and unauthorized-denial workflows remain unverified. Record those results before presenting the workflow as tested.
 6. Roll back by restoring the previous Vercel Preview deployment. This does not affect the existing production Vercel URL or Firebase data.
 
-No Preview deployment or live workflow verification is claimed. Software and Emulator tests do not establish research validity.
+The separate Preview deployment is verified as built and deployed, but authenticated faculty/student workflows and direct professor accessibility are not verified; the manifest request redirected to Vercel SSO. Software and Emulator tests do not establish research validity.
 
 ### Professor-demo UI checkpoint
 
