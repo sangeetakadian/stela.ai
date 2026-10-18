@@ -4,6 +4,7 @@ import 'package:stela_app/widgets/code_editor_widget.dart';
 import 'package:stela_app/models/quiz_model.dart';
 import '../models/assessment_tagging.dart';
 import '../services/assessment_feedback_service.dart';
+import '../services/assessment_tagging_service.dart';
 
 class QuizResultsScreen extends StatefulWidget {
   final Map<String, dynamic> quiz;
@@ -564,6 +565,85 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
     );
   }
 
+  Widget _buildQuestionCompetencyEvidence(
+    int index,
+    Map<String, dynamic> question,
+  ) {
+    final rawTag = question['assessmentTag'];
+    if (rawTag is! Map) {
+      return const Text('Question-level evidence: Not assessed');
+    }
+
+    final tag = Map<String, dynamic>.from(rawTag);
+    final sourceFingerprint = tag['sourceFingerprint']?.toString();
+    final currentFingerprint =
+        question['assessmentTagSourceFingerprint']?.toString() ??
+            AssessmentTaggingService.buildQuestionFingerprint(question);
+    if (tag['reviewed'] != true ||
+        question['assessmentTagStale'] == true ||
+        sourceFingerprint == null ||
+        sourceFingerprint.isEmpty ||
+        sourceFingerprint != currentFingerprint) {
+      return const Text('Question-level evidence: Mapping requires review');
+    }
+
+    List<String> labelsFor(String idKey, String labelKey) {
+      final rawIds = tag[idKey];
+      if (rawIds is! List) {
+        return const [];
+      }
+      final rawLabels = tag[labelKey];
+      final labels = rawLabels is Map
+          ? Map<String, dynamic>.from(rawLabels)
+          : const <String, dynamic>{};
+      final resolvedLabels = <String>{};
+      for (final value in rawIds) {
+        final id = value.toString();
+        final snapshot = labels[id]?.toString().trim();
+        resolvedLabels.add(
+          snapshot == null || snapshot.isEmpty
+              ? widget.taxonomyNodes[id]?.name ?? id
+              : snapshot,
+        );
+      }
+      final sortedLabels = resolvedLabels.toList()..sort();
+      return sortedLabels;
+    }
+
+    final concepts = labelsFor('conceptIds', 'conceptLabels');
+    final skills = labelsFor('assessedSkillIds', 'skillLabels');
+    if (concepts.isEmpty && skills.isEmpty) {
+      return const Text(
+          'Question-level evidence: No confirmed competency tags');
+    }
+
+    final hasValidScore = index < widget.earnedMarksByQuestion.length &&
+        index < widget.possibleMarksByQuestion.length &&
+        widget.earnedMarksByQuestion[index].isFinite &&
+        widget.possibleMarksByQuestion[index].isFinite &&
+        widget.possibleMarksByQuestion[index] > 0 &&
+        widget.earnedMarksByQuestion[index] >= 0 &&
+        widget.earnedMarksByQuestion[index] <=
+            widget.possibleMarksByQuestion[index];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Question-level evidence',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+        if (concepts.isNotEmpty) Text('Concepts: ${concepts.join(', ')}'),
+        if (skills.isNotEmpty) Text('Skills: ${skills.join(', ')}'),
+        Text(
+          hasValidScore
+              ? 'Score: ${_fmtScore(widget.earnedMarksByQuestion[index])}/${_fmtScore(widget.possibleMarksByQuestion[index])} marks'
+              : 'Score unavailable',
+        ),
+      ],
+    );
+  }
+
   Widget _buildQuestionCard(int index) {
     final question = widget.questions[index];
     final userAnswer = widget.userAnswers[index];
@@ -715,6 +795,8 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
                 fontFamily: 'PTSerif',
               ),
             ),
+            SizedBox(height: 12),
+            _buildQuestionCompetencyEvidence(index, question),
             SizedBox(height: 12),
 
             // Image for image questions

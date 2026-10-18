@@ -252,7 +252,9 @@ class _AssessmentTagEditorDialogState extends State<AssessmentTagEditorDialog> {
               'reviewed': true,
             });
           },
-          child: const Text('Save'),
+          child: Text(
+            widget.sourceIsStale ? 'Reconfirm tags' : 'Save tags',
+          ),
         ),
       ],
     );

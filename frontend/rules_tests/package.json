@@ -4,11 +4,14 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
+    "test:claims": "node --test claim_provisioner.test.js",
+    "test:build-config": "node --test build_vercel.test.js",
     "test:emulator": "firebase emulators:exec --config ../firebase.json --only database --project demo-assessment-tagging \"npm test\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "6.0.0",
     "firebase": "13.0.0",
-    "firebase-tools": "15.34.0"
+    "firebase-tools": "15.34.0",
+    "firebase-admin": "13.5.0"
   }
 }

@@ -1,0 +1,170 @@
+name: Validate and deploy assessment pilot Preview
+
+on:
+  push:
+    branches:
+      - feature/assessment-tagging-intermediate
+    paths:
+      - "frontend/**"
+      - "docs/assessment-tagging-completed-work.md"
+      - ".github/workflows/deploy_assessment_pilot_preview.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java for Firebase Emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.12.0
+          cache: npm
+          cache-dependency-path: frontend/rules_tests/package-lock.json
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.35.7
+          channel: stable
+          cache: true
+          cache-dependency-path: frontend/pubspec.lock
+
+      - name: Install rules test dependencies
+        working-directory: frontend/rules_tests
+        run: npm ci
+
+      - name: Test claim provisioner safety
+        working-directory: frontend/rules_tests
+        run: npm run test:claims
+
+      - name: Test isolated pilot build configuration
+        working-directory: frontend/rules_tests
+        run: npm run test:build-config
+
+      - name: Test RTDB rules in Firebase Emulator
+        working-directory: frontend/rules_tests
+        run: npm run test:emulator
+
+      - name: Install Flutter dependencies
+        working-directory: frontend
+        run: flutter pub get --enforce-lockfile
+
+      - name: Run focused Flutter tests
+        working-directory: frontend
+        run: >-
+          flutter test
+          test/assessment_feedback_service_test.dart
+          test/assessment_tagging_service_test.dart
+          test/assessment_tagging_test.dart
+          test/taxonomy_service_test.dart
+          test/widget_test.dart
+
+      - name: Build pilot web app
+        working-directory: frontend
+        env:
+          CODE_EXEC_ENDPOINT: ${{ vars.PILOT_CODE_EXEC_ENDPOINT }}
+          VERCEL_ENV: preview
+          PILOT_FIREBASE_API_KEY: ${{ vars.PILOT_FIREBASE_API_KEY }}
+          PILOT_FIREBASE_APP_ID: ${{ vars.PILOT_FIREBASE_APP_ID }}
+          PILOT_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.PILOT_FIREBASE_MESSAGING_SENDER_ID }}
+          PILOT_FIREBASE_PROJECT_ID: ${{ vars.PILOT_FIREBASE_PROJECT_ID }}
+          PILOT_FIREBASE_DATABASE_URL: ${{ vars.PILOT_FIREBASE_DATABASE_URL }}
+          PILOT_FIREBASE_AUTH_DOMAIN: ${{ vars.PILOT_FIREBASE_AUTH_DOMAIN }}
+          PILOT_FIREBASE_STORAGE_BUCKET: ${{ vars.PILOT_FIREBASE_STORAGE_BUCKET }}
+          PILOT_FIREBASE_MEASUREMENT_ID: ${{ vars.PILOT_FIREBASE_MEASUREMENT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CODE_EXEC_ENDPOINT" ]; then
+            echo "Set PILOT_CODE_EXEC_ENDPOINT in GitHub Actions variables." >&2
+            exit 1
+          fi
+          for key in PILOT_FIREBASE_API_KEY PILOT_FIREBASE_APP_ID PILOT_FIREBASE_MESSAGING_SENDER_ID PILOT_FIREBASE_PROJECT_ID PILOT_FIREBASE_DATABASE_URL PILOT_FIREBASE_AUTH_DOMAIN PILOT_FIREBASE_STORAGE_BUCKET; do
+            if [ -z "${!key}" ]; then
+              echo "Set $key in GitHub Actions variables after creating the pilot Firebase project." >&2
+              exit 1
+            fi
+          done
+          if [ "$PILOT_FIREBASE_PROJECT_ID" = "stela23-f9a52" ]; then
+            echo "Pilot build refuses the existing shared Firebase project." >&2
+            exit 1
+          fi
+          flutter build web --release \
+            --dart-define=ISTELA_ASSESSMENT_PILOT=true \
+            --dart-define=PILOT_FIREBASE_API_KEY="$PILOT_FIREBASE_API_KEY" \
+            --dart-define=PILOT_FIREBASE_APP_ID="$PILOT_FIREBASE_APP_ID" \
+            --dart-define=PILOT_FIREBASE_MESSAGING_SENDER_ID="$PILOT_FIREBASE_MESSAGING_SENDER_ID" \
+            --dart-define=PILOT_FIREBASE_PROJECT_ID="$PILOT_FIREBASE_PROJECT_ID" \
+            --dart-define=PILOT_FIREBASE_DATABASE_URL="$PILOT_FIREBASE_DATABASE_URL" \
+            --dart-define=PILOT_FIREBASE_AUTH_DOMAIN="$PILOT_FIREBASE_AUTH_DOMAIN" \
+            --dart-define=PILOT_FIREBASE_STORAGE_BUCKET="$PILOT_FIREBASE_STORAGE_BUCKET" \
+            --dart-define=PILOT_FIREBASE_MEASUREMENT_ID="$PILOT_FIREBASE_MEASUREMENT_ID" \
+            --dart-define=CODE_EXEC_ENDPOINT="$CODE_EXEC_ENDPOINT"
+
+  deploy-preview:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.12.0
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@64.5.0
+
+      - name: Verify Vercel Preview credentials
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.ASSESSMENT_PILOT_VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.ASSESSMENT_PILOT_VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "Configure VERCEL_TOKEN, ASSESSMENT_PILOT_VERCEL_ORG_ID, and ASSESSMENT_PILOT_VERCEL_PROJECT_ID Actions secrets for the dedicated pilot Vercel project." >&2
+            exit 1
+          fi
+          if [ "$VERCEL_PROJECT_ID" = "prj_cMuj55TD6H3cXC7MLNN5dy0nx7MF" ]; then
+            echo "Refusing to deploy pilot Preview using the existing production Vercel project." >&2
+            exit 1
+          fi
+
+      - name: Link dedicated pilot Vercel project
+        env:
+          VERCEL_ORG_ID: ${{ secrets.ASSESSMENT_PILOT_VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.ASSESSMENT_PILOT_VERCEL_PROJECT_ID }}
+        run: |
+          mkdir -p frontend/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > frontend/.vercel/project.json
+
+      - name: Pull Preview environment
+        working-directory: frontend
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+
+      - name: Build Vercel Preview
+        working-directory: frontend
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --token="$VERCEL_TOKEN"
+
+      - name: Deploy Vercel Preview
+        working-directory: frontend
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --prebuilt --token="$VERCEL_TOKEN"

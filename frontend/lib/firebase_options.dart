@@ -15,8 +15,31 @@ import 'package:flutter/foundation.dart'
 /// );
 /// ```
 class DefaultFirebaseOptions {
+  static const bool _isAssessmentPilot =
+      bool.fromEnvironment('ISTELA_ASSESSMENT_PILOT');
+  static const String _pilotApiKey =
+      String.fromEnvironment('PILOT_FIREBASE_API_KEY');
+  static const String _pilotAppId =
+      String.fromEnvironment('PILOT_FIREBASE_APP_ID');
+  static const String _pilotMessagingSenderId =
+      String.fromEnvironment('PILOT_FIREBASE_MESSAGING_SENDER_ID');
+  static const String _pilotProjectId =
+      String.fromEnvironment('PILOT_FIREBASE_PROJECT_ID');
+  static const String _pilotDatabaseUrl =
+      String.fromEnvironment('PILOT_FIREBASE_DATABASE_URL');
+  static const String _pilotAuthDomain =
+      String.fromEnvironment('PILOT_FIREBASE_AUTH_DOMAIN');
+  static const String _pilotStorageBucket =
+      String.fromEnvironment('PILOT_FIREBASE_STORAGE_BUCKET');
+  static const String _pilotMeasurementId =
+      String.fromEnvironment('PILOT_FIREBASE_MEASUREMENT_ID');
+  static const String _existingProjectId = 'stela23-f9a52';
+
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
+      if (_isAssessmentPilot) {
+        return _assessmentPilotWeb;
+      }
       return web;
     }
     switch (defaultTargetPlatform) {
@@ -43,6 +66,45 @@ class DefaultFirebaseOptions {
     }
   }
 
+  static FirebaseOptions get _assessmentPilotWeb {
+    final requiredValues = {
+      'PILOT_FIREBASE_API_KEY': _pilotApiKey,
+      'PILOT_FIREBASE_APP_ID': _pilotAppId,
+      'PILOT_FIREBASE_MESSAGING_SENDER_ID': _pilotMessagingSenderId,
+      'PILOT_FIREBASE_PROJECT_ID': _pilotProjectId,
+      'PILOT_FIREBASE_DATABASE_URL': _pilotDatabaseUrl,
+      'PILOT_FIREBASE_AUTH_DOMAIN': _pilotAuthDomain,
+      'PILOT_FIREBASE_STORAGE_BUCKET': _pilotStorageBucket,
+    };
+    final missingValues = requiredValues.entries
+        .where((entry) => entry.value.trim().isEmpty)
+        .map((entry) => entry.key)
+        .toList();
+    if (missingValues.isNotEmpty) {
+      throw UnsupportedError(
+        'Assessment pilot Firebase configuration is incomplete: '
+        '${missingValues.join(', ')}.',
+      );
+    }
+    if (_pilotProjectId == _existingProjectId) {
+      throw UnsupportedError(
+        'Assessment pilot builds cannot target the existing shared Firebase project.',
+      );
+    }
+
+    return FirebaseOptions(
+      apiKey: _pilotApiKey,
+      appId: _pilotAppId,
+      messagingSenderId: _pilotMessagingSenderId,
+      projectId: _pilotProjectId,
+      databaseURL: _pilotDatabaseUrl,
+      authDomain: _pilotAuthDomain,
+      storageBucket: _pilotStorageBucket,
+      measurementId:
+          _pilotMeasurementId.isEmpty ? null : _pilotMeasurementId,
+    );
+  }
+
   static const FirebaseOptions web = FirebaseOptions(
     apiKey: 'AIzaSyBzQ8LcZXsyS6tLlU_k_WO4WYTGlhwxqwg',
     appId: '1:396384933688:web:54f68f7c6c674b2a4153cd',
@@ -53,6 +115,17 @@ class DefaultFirebaseOptions {
     storageBucket: 'stela23-f9a52.firebasestorage.app',
     measurementId: 'G-K976TBCJCN',
   );
+
+  // static const FirebaseOptions web = FirebaseOptions(
+  //   apiKey: 'AIzaSyAvPxmsTNS_xfGb_c45DsT1hEqVulHEjmk',
+  //   authDomain: 'ailearn-e767a.firebaseapp.com',
+  //   projectId: 'ailearn-e767a',
+  //   databaseURL: 'https://ailearn-e767a-default-rtdb.asia-southeast1.firebasedatabase.app/',
+  //   storageBucket: 'ailearn-e767a.firebasestorage.app',
+  //   messagingSenderId: '68438214773',
+  //   appId: '1:68438214773:web:e26be578c9e3c66a4f503c',
+  //   measurementId: 'G-1G5T5Z7132',
+  // );
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyBR7Olr9l75eipxfmUR7cwa0DkrAUGzOOc',

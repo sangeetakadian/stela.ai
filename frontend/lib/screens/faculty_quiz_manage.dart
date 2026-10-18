@@ -1633,7 +1633,7 @@ class _QuizCreationFormState extends State<QuizCreationForm> {
         ? (tag['assessedSkillIds'] as List).length
         : 0;
     if (conceptIds == 0 && skillIds == 0) {
-      return 'Topics & Skills';
+      return 'Tag concepts & skills';
     }
     return '$conceptIds concept(s) • $skillIds skill(s)';
   }
@@ -1901,6 +1901,8 @@ class _QuizCreationFormState extends State<QuizCreationForm> {
                     return 'MCQ';
                   }
 
+                  final isAssessmentTagStale =
+                      q['assessmentTagStale'] == true;
                   return Card(
                     margin: EdgeInsets.symmetric(vertical: 8),
                     child: Padding(
@@ -1953,8 +1955,16 @@ class _QuizCreationFormState extends State<QuizCreationForm> {
                             alignment: Alignment.centerRight,
                             child: TextButton.icon(
                               onPressed: () => _openAssessmentTagEditor(qIndex),
-                              icon: Icon(Icons.psychology_alt_outlined),
-                              label: Text(_assessmentTagSummary(q)),
+                              icon: Icon(
+                                isAssessmentTagStale
+                                    ? Icons.warning_amber_rounded
+                                    : Icons.psychology_alt_outlined,
+                              ),
+                              label: Text(
+                                isAssessmentTagStale
+                                    ? 'Review stale tags'
+                                    : _assessmentTagSummary(q),
+                              ),
                             ),
                           ),
                           SizedBox(height: 12),
