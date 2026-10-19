@@ -22,6 +22,7 @@ class QuizResultsScreen extends StatefulWidget {
   final List<double> earnedMarksByQuestion;
   final List<double> possibleMarksByQuestion;
   final Map<String, TaxonomyNode> taxonomyNodes;
+  final bool assessmentTagsLoadFailed;
   const QuizResultsScreen({
     Key? key,
     required this.quiz,
@@ -39,6 +40,7 @@ class QuizResultsScreen extends StatefulWidget {
     this.earnedMarksByQuestion = const [],
     this.possibleMarksByQuestion = const [],
     this.taxonomyNodes = const {},
+    this.assessmentTagsLoadFailed = false,
   }) : super(key: key);
 
   @override
@@ -519,7 +521,11 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
               ),
               const SizedBox(height: 8),
               if (feedback.isEmpty)
-                const Text('Not assessed')
+                Text(
+                  widget.assessmentTagsLoadFailed
+                      ? "Tag data could not be loaded. Check student read access to this quiz's assessment tags in Firebase."
+                      : 'No reviewed concept or skill tags were found. Confirm the faculty saved the tagged quiz.',
+                )
               else ...[
                 if (!feedback.any(
                   (item) => item.kind == TaxonomyNodeKind.concept,
@@ -569,6 +575,11 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
     int index,
     Map<String, dynamic> question,
   ) {
+    if (widget.assessmentTagsLoadFailed) {
+      return const Text(
+        'Question-level evidence: Tag data could not be loaded',
+      );
+    }
     final rawTag = question['assessmentTag'];
     if (rawTag is! Map) {
       return const Text('Question-level evidence: Not assessed');

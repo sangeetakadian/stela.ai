@@ -40,6 +40,7 @@ class _FacultyQuizTakingScreenState extends State<FacultyQuizTakingScreen>
   int? _subjectiveControllerIndex;
   List<Map<String, dynamic>> questions = [];
   Map<String, TaxonomyNode> taxonomyNodes = const {};
+  bool _assessmentTagsLoadFailed = false;
   Timer? _timer;
   int timeRemaining = 0; // in seconds
   int totalTimeAllocated = 0; // in seconds
@@ -75,6 +76,7 @@ class _FacultyQuizTakingScreenState extends State<FacultyQuizTakingScreen>
           questions: questions,
         );
       } catch (error) {
+        _assessmentTagsLoadFailed = true;
         debugPrint('Assessment tags could not be loaded: $error');
         _showEvidenceLoadNotice(
           'Assessment feedback is unavailable for this quiz right now.',
@@ -889,6 +891,7 @@ class _FacultyQuizTakingScreenState extends State<FacultyQuizTakingScreen>
           earnedMarksByQuestion: earnedMarksByQuestion,
           possibleMarksByQuestion: possibleMarksByQuestion,
           taxonomyNodes: taxonomyNodes,
+          assessmentTagsLoadFailed: _assessmentTagsLoadFailed,
         ),
       ),
     );

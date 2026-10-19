@@ -119,10 +119,16 @@ void main() {
           earnedMarksByQuestion: const [1],
           possibleMarksByQuestion: const [1],
           taxonomyNodes: const {
+            'mathematics': TaxonomyNode(
+              id: 'mathematics',
+              kind: TaxonomyNodeKind.concept,
+              name: 'Mathematics',
+            ),
             'algebra': TaxonomyNode(
               id: 'algebra',
               kind: TaxonomyNodeKind.concept,
               name: 'Algebra',
+              parentId: 'mathematics',
             ),
             'reasoning': TaxonomyNode(
               id: 'reasoning',
@@ -136,9 +142,49 @@ void main() {
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Question-level evidence'));
 
+    expect(find.text('Concept: Mathematics / Algebra'), findsOneWidget);
+    expect(find.text('Concept: Mathematics'), findsOneWidget);
+    expect(find.text('1/1 (100%) • 1 item(s)'), findsNWidgets(2));
+    expect(find.text('Skill: Reasoning'), findsOneWidget);
+    expect(find.textContaining('Insufficient evidence'), findsOneWidget);
     expect(find.text('Concepts: Mathematics / Algebra'), findsOneWidget);
     expect(find.text('Skills: Reasoning'), findsOneWidget);
     expect(find.text('Score: 1/1 marks'), findsOneWidget);
     expect(find.textContaining('Unconfirmed skill'), findsNothing);
+  });
+
+  testWidgets('student results explain when tag metadata cannot be loaded',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1200, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: QuizResultsScreen(
+          quiz: const {'title': 'Algebra quiz'},
+          subject: const {'label': 'Mathematics', 'color': Colors.blue},
+          questions: const [
+            {'question': 'Solve the equation.', 'type': 'mcq'},
+          ],
+          userAnswers: const [null],
+          correctAnswers: 0,
+          percentage: 0,
+          timeTaken: Duration.zero,
+          assessmentTagsLoadFailed: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Check student read access'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Question-level evidence: Tag data could not be loaded'),
+      findsOneWidget,
+    );
   });
 }
